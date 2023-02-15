@@ -29,8 +29,5 @@ options 	COMPAT_FREEBSD64
 # Needs porting to use __USER_CAP
 nooptions 	COMPAT_FREEBSD32
 
-# DTrace doesn't work with CHERI yet
-nooptions 	KDTRACE_HOOKS		# Kernel DTrace hooks
-
 # Doesn't build with Morello LLVM
 nooptions 	PAC
