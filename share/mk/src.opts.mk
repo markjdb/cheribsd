@@ -335,11 +335,6 @@ BROKEN_OPTIONS+=NS_CACHING
 BROKEN_OPTIONS+=OFED
 .endif
 
-.if ${__C} == "cheri" || ${__C} == "morello" || \
-    ${__T:Maarch64*c*} || ${__T:Mriscv*c*}
-BROKEN_OPTIONS+=DTRACE
-.endif
-
 # EFI doesn't exist on powerpc (well, officially)
 .if ${__T:Mpowerpc*}
 BROKEN_OPTIONS+=EFI
