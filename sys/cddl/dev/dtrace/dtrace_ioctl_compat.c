@@ -137,7 +137,7 @@ dtrace_copyin_aggdesc(void * __capability uaddr, dtrace_aggdesc_t *aggdesc)
 		if (error != 0)
 			return (error);
 		aggdesc->dtagd_name =
-		    __USER_CAP_STR((void *)aggdesc64.tagd_name);
+		    __USER_CAP_STR(aggdesc64.tagd_name);
 		aggdesc->dtagd_varid = aggdesc64.dtagd_varid;
 		aggdesc->dtagd_flags = aggdesc64.dtagd_flags;
 		aggdesc->dtagd_id = aggdesc64.dtagd_id;
@@ -194,7 +194,7 @@ dtrace_make_enable_io(caddr_t addr)
 
 	if (!SV_CURPROC_FLAG(SV_CHERI)) {
 		dtrace_enable_io64_t *p64 = (dtrace_enable_io64_t *)addr;
-		enable.dof = __USER_CAP_UNBOUND((void *)p64->dof);
+		enable.dof = __USER_CAP_UNBOUND(p64->dof);
 		enable.n_matched = p64->n_matched;
 		return (enable);
 	}
