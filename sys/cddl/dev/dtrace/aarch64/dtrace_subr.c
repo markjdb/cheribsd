@@ -275,7 +275,7 @@ dtrace_invop_start(struct trapframe *frame)
 
 	tmp = (invop & LDP_STP_MASK);
 	if (tmp == STP_64 || tmp == LDP_64) {
-		sp = (register_t *)frame->tf_sp;
+		sp = (__cheri_fromcap register_t *)frame->tf_sp;
 		data = invop;
 		arg1 = (data >> ARG1_SHIFT) & ARG1_MASK;
 		arg2 = (data >> ARG2_SHIFT) & ARG2_MASK;
