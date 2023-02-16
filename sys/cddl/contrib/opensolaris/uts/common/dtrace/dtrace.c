@@ -599,7 +599,7 @@ static uint64_t dtrace_helper(int, dtrace_mstate_t *,
 static dtrace_helpers_t *dtrace_helpers_create(proc_t *);
 static void dtrace_buffer_drop(dtrace_buffer_t *);
 static int dtrace_buffer_consumed(dtrace_buffer_t *, hrtime_t when);
-static intptr_t dtrace_buffer_reserve(dtrace_buffer_t *, size_t, size_t,
+static ssize_t dtrace_buffer_reserve(dtrace_buffer_t *, size_t, size_t,
     dtrace_state_t *, dtrace_mstate_t *);
 static int dtrace_state_option(dtrace_state_t *, dtrace_optid_t,
     dtrace_optval_t);
@@ -984,7 +984,7 @@ dtrace_canload_remains(uint64_t addr, size_t sz, size_t *remain,
 	}
 
 	if ((fp = mstate->dtms_getf) != NULL) {
-		uintptr_t psz = sizeof (void *);
+		size_t psz = sizeof (void *);
 		vnode_t *vp;
 		vnodeops_t *op;
 
@@ -2546,7 +2546,7 @@ dtrace_aggregate(dtrace_aggregation_t *agg, dtrace_buffer_t *dbuf,
 	caddr_t tomax, data, kdata;
 	dtrace_actkind_t action;
 	dtrace_action_t *act;
-	uintptr_t offs;
+	size_t offs;
 
 	if (buf == NULL)
 		return;
@@ -2841,7 +2841,7 @@ dtrace_speculation_commit(dtrace_state_t *state, processorid_t cpu,
 	dtrace_buffer_t *src, *dest;
 	uintptr_t daddr, saddr, dlimit, slimit;
 	dtrace_speculation_state_t curstate, new = 0;
-	intptr_t offs;
+	ssize_t offs;
 	uint64_t timestamp;
 
 	if (which == 0)
@@ -6032,8 +6032,8 @@ inetout:	regs[rd] = (uintptr_t)end + 1;
 	}
 
 	case DIF_SUBR_MEMREF: {
-		uintptr_t size = 2 * sizeof(uintptr_t);
 		uintptr_t *memref = (uintptr_t *) P2ROUNDUP(mstate->dtms_scratch_ptr, sizeof(uintptr_t));
+		size_t size = 2 * sizeof(uintptr_t);
 		size_t scratch_size = ((uintptr_t) memref - mstate->dtms_scratch_ptr) + size;
 
 		/* address and length */
@@ -6906,7 +6906,6 @@ dtrace_action_breakpoint(dtrace_ecb_t *ecb)
 	char c[DTRACE_FULLNAMELEN + 80], *str;
 	char *msg = "dtrace: breakpoint action at probe ";
 	char *ecbmsg = " (ecb ";
-	uintptr_t mask = (0xf << (sizeof (uintptr_t) * NBBY / 4));
 	uintptr_t val = (uintptr_t)ecb;
 	int shift = (sizeof (uintptr_t) * NBBY) - 4, i = 0;
 
@@ -6947,9 +6946,9 @@ dtrace_action_breakpoint(dtrace_ecb_t *ecb)
 		c[i++] = *ecbmsg++;
 
 	while (shift >= 0) {
-		mask = (uintptr_t)0xf << shift;
+		size_t mask = (size_t)0xf << shift;
 
-		if (val >= ((uintptr_t)1 << shift))
+		if (val >= ((size_t)1 << shift))
 			c[i++] = "0123456789abcdef"[(val & mask) >> shift];
 		shift -= 4;
 	}
@@ -7321,7 +7320,7 @@ dtrace_probe(dtrace_id_t id, uintptr_t arg0, uintptr_t arg1,
 	dtrace_mstate_t mstate;
 	dtrace_ecb_t *ecb;
 	dtrace_action_t *act;
-	intptr_t offs;
+	ssize_t offs;
 	size_t size;
 	int vtime, onintr;
 	volatile uint16_t *flags;
@@ -8019,7 +8018,7 @@ dtrace_hash_str(const char *p)
 }
 
 static dtrace_hash_t *
-dtrace_hash_create(uintptr_t stroffs, uintptr_t nextoffs, uintptr_t prevoffs)
+dtrace_hash_create(size_t stroffs, size_t nextoffs, size_t prevoffs)
 {
 	dtrace_hash_t *hash = kmem_zalloc(sizeof (dtrace_hash_t), KM_SLEEP);
 
@@ -12296,11 +12295,11 @@ dtrace_buffer_drop(dtrace_buffer_t *buf)
  * mstate.  Returns the new offset in the buffer, or a negative value if an
  * error has occurred.
  */
-static intptr_t
+static ssize_t
 dtrace_buffer_reserve(dtrace_buffer_t *buf, size_t needed, size_t align,
     dtrace_state_t *state, dtrace_mstate_t *mstate)
 {
-	intptr_t offs = buf->dtb_offset, soffs;
+	size_t offs = buf->dtb_offset, soffs;
 	intptr_t woffs;
 	caddr_t tomax;
 	size_t total;
