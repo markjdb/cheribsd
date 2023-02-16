@@ -70,7 +70,7 @@ local config = {
 	abi_long = "long",
 	abi_semid_t = "semid_t",
 	abi_ptr_array_t = "",
-	ptr_intptr_t_cast = "intptr_t",
+	ptr_intptr_t_cast = "__cheri_addr uint64_t",
 	ptr_qualified="*",
 	ptrmaskname = "sysargmask",
 	syscall_abi_change = "",
@@ -816,7 +816,7 @@ local function handle_noncompat(sysnum, thr_flag, flags, sysflags, rettype,
 			if isptrtype(argtype) then
 				write_line("systrace", string.format(
 				    "\t\tuarg[a++] = (%s)p->%s; /* %s */\n",
-				    config["ptr_intptr_t_cast"],
+				    not argtype:find("intptr_t") and config["ptr_intptr_t_cast"] or "intptr_t",
 				    argname, argtype))
 			elseif argtype == "union l_semun" then
 				write_line("systrace", string.format(
