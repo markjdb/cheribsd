@@ -753,7 +753,7 @@ dt_pfdict_create(dtrace_hdl_t *dtp)
 			return (dt_set_errno(dtp, EDT_NOMEM));
 		}
 
-		bcopy(pfd, pfc, sizeof (dt_pfconv_t));
+		memcpy(pfc, pfd, sizeof (dt_pfconv_t));
 		h = dt_strtab_hash(pfc->pfc_name, NULL) % n;
 		pfc->pfc_next = pdi->pdi_buckets[h];
 		pdi->pdi_buckets[h] = pfc;
