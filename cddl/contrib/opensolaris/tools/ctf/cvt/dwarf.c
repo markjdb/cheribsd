@@ -1436,6 +1436,14 @@ die_base_from_dwarf(dwarf_t *dw, Dwarf_Die base, Dwarf_Off off, size_t sz)
 		intr->intr_signed = 1;
 		intr->intr_fformat = die_base_type2enc(dw, off, enc, sz);
 		break;
+	case 160:
+		intr->intr_type = INTR_INT;
+		intr->intr_signed = 1;
+		break;
+	case 161: /* XXX-MJ __intcap */
+		intr->intr_type = INTR_INT;
+		intr->intr_signed = 0;
+		break;
 	default:
 		terminate("die %llu: unknown base type encoding 0x%llx\n",
 		    off, enc);
