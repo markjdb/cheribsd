@@ -52,10 +52,13 @@
 
 #define	MAX_USTACK_DEPTH  2048
 
-uint8_t dtrace_fuword8_nocheck(void *);
-uint16_t dtrace_fuword16_nocheck(void *);
-uint32_t dtrace_fuword32_nocheck(void *);
-uint64_t dtrace_fuword64_nocheck(void *);
+uint8_t dtrace_fuword8_nocheck(void * __capability);
+uint16_t dtrace_fuword16_nocheck(void * __capability);
+uint32_t dtrace_fuword32_nocheck(void * __capability);
+uint64_t dtrace_fuword64_nocheck(void * __capability);
+#if __has_feature(capabilities)
+uintcap_t dtrace_fucap_nocheck(void * __capability);
+#endif
 
 void
 dtrace_getpcstack(pc_t *pcstack, int pcstack_limit, int aframes,
@@ -102,12 +105,13 @@ dtrace_getpcstack(pc_t *pcstack, int pcstack_limit, int aframes,
 
 static int
 dtrace_getustack_common(uint64_t *pcstack, int pcstack_limit, uintptr_t pc,
-    uintptr_t fp)
+    uintcap_t fp)
 {
 	volatile uint16_t *flags =
 	    (volatile uint16_t *)&cpu_core[curcpu].cpuc_dtrace_flags;
+	size_t pcoff;
 	int ret = 0;
-	uintptr_t oldfp = fp;
+	uintcap_t oldfp = fp;
 
 	ASSERT(pcstack == NULL || pcstack_limit > 0);
 
@@ -132,9 +136,19 @@ dtrace_getustack_common(uint64_t *pcstack, int pcstack_limit, uintptr_t pc,
 		if (fp == 0)
 			break;
 
-		pc = dtrace_fuword64((void *)(fp +
-		    offsetof(struct unwind_state, pc)));
-		fp = dtrace_fuword64((void *)fp);
+#if __has_feature(capabilities)
+		if (!cheri_can_access((void * __capability)fp,
+		    CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP,
+		    (ptraddr_t)fp, sizeof(struct unwind_state)))
+			break;
+		pcoff = sizeof(uintcap_t);
+#else
+		pcoff = offsetof(struct unwind_state, pc);
+#endif
+
+		pc = (__cheri_addr uintptr_t)dtrace_fucap(
+		    (void * __capability)(fp + pcoff));
+		fp = dtrace_fucap((void * __capability)fp);
 
 		if (fp == oldfp) {
 			*flags |= CPU_DTRACE_BADSTACK;
@@ -168,17 +182,22 @@ dtrace_getupcstack(uint64_t *pcstack, int pcstack_limit)
 {
 	proc_t *p = curproc;
 	struct trapframe *tf;
-	uintptr_t pc, fp;
+	uintptr_t pc;
+	uintcap_t fp;
 	volatile uint16_t *flags =
 	    (volatile uint16_t *)&cpu_core[curcpu].cpuc_dtrace_flags;
 	int n;
 
+	printf("%s:%d\n", __func__, __LINE__);
+
 	if (*flags & CPU_DTRACE_FAULT)
 		return;
 
+	printf("%s:%d\n", __func__, __LINE__);
 	if (pcstack_limit <= 0)
 		return;
 
+	printf("%s:%d\n", __func__, __LINE__);
 	/*
 	 * If there's no user context we still need to zero the stack.
 	 */
@@ -212,7 +231,9 @@ dtrace_getupcstack(uint64_t *pcstack, int pcstack_limit)
 		pc = tf->tf_lr;
 	}
 
+	printf("%s:%d\n", __func__, __LINE__);
 	n = dtrace_getustack_common(pcstack, pcstack_limit, pc, fp);
+	printf("%s:%d\n", __func__, __LINE__);
 	ASSERT(n >= 0);
 	ASSERT(n <= pcstack_limit);
 
@@ -336,12 +357,12 @@ dtrace_copyoutstr(uintptr_t kaddr, uintptr_t uaddr, size_t size,
 }
 
 uint8_t
-dtrace_fuword8(void *uaddr)
+dtrace_fuword8(void * __capability uaddr)
 {
 
-	if ((uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
+	if ((__cheri_addr uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
 		DTRACE_CPUFLAG_SET(CPU_DTRACE_BADADDR);
-		cpu_core[curcpu].cpuc_dtrace_illval = (uintptr_t)uaddr;
+		cpu_core[curcpu].cpuc_dtrace_illval = (__cheri_addr uintptr_t)uaddr;
 		return (0);
 	}
 
@@ -349,12 +370,12 @@ dtrace_fuword8(void *uaddr)
 }
 
 uint16_t
-dtrace_fuword16(void *uaddr)
+dtrace_fuword16(void * __capability uaddr)
 {
 
-	if ((uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
+	if ((__cheri_addr uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
 		DTRACE_CPUFLAG_SET(CPU_DTRACE_BADADDR);
-		cpu_core[curcpu].cpuc_dtrace_illval = (uintptr_t)uaddr;
+		cpu_core[curcpu].cpuc_dtrace_illval = (__cheri_addr uintptr_t)uaddr;
 		return (0);
 	}
 
@@ -362,12 +383,12 @@ dtrace_fuword16(void *uaddr)
 }
 
 uint32_t
-dtrace_fuword32(void *uaddr)
+dtrace_fuword32(void * __capability uaddr)
 {
 
-	if ((uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
+	if ((__cheri_addr uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
 		DTRACE_CPUFLAG_SET(CPU_DTRACE_BADADDR);
-		cpu_core[curcpu].cpuc_dtrace_illval = (uintptr_t)uaddr;
+		cpu_core[curcpu].cpuc_dtrace_illval = (__cheri_addr uintptr_t)uaddr;
 		return (0);
 	}
 
@@ -375,14 +396,29 @@ dtrace_fuword32(void *uaddr)
 }
 
 uint64_t
-dtrace_fuword64(void *uaddr)
+dtrace_fuword64(void * __capability uaddr)
 {
 
-	if ((uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
+	if ((__cheri_addr uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
 		DTRACE_CPUFLAG_SET(CPU_DTRACE_BADADDR);
-		cpu_core[curcpu].cpuc_dtrace_illval = (uintptr_t)uaddr;
+		cpu_core[curcpu].cpuc_dtrace_illval = (__cheri_addr uintptr_t)uaddr;
 		return (0);
 	}
 
 	return (dtrace_fuword64_nocheck(uaddr));
 }
+
+#if __has_feature(capabilities)
+uintcap_t
+dtrace_fucap(void * __capability uaddr)
+{
+
+	if ((__cheri_addr uintptr_t)uaddr > VM_MAXUSER_ADDRESS) {
+		DTRACE_CPUFLAG_SET(CPU_DTRACE_BADADDR);
+		cpu_core[curcpu].cpuc_dtrace_illval = (__cheri_addr uintptr_t)uaddr;
+		return (0);
+	}
+
+	return (dtrace_fucap_nocheck(uaddr));
+}
+#endif

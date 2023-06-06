@@ -204,8 +204,22 @@ dtrace_trap(struct trapframe *frame, u_int type)
 		 * There are only a couple of trap types that are expected.
 		 * All the rest will be handled in the usual way.
 		 */
+		printf("%s:%d type %u %lp %#lx esr %#lx\n", __func__, __LINE__, type, (void * __capability)frame->tf_elr, frame->tf_far,
+		    frame->tf_esr);
 		switch (type) {
 		case EXCP_DATA_ABORT:
+#ifdef notyet
+#if __has_feature(capabilities)
+			switch (frame->tf_esr & ISS_DATA_DFSC_MASK) {
+			case ISS_DATA_DFSC_CAP_TAG:
+			case ISS_DATA_DFSC_CAP_SEALED:
+			case ISS_DATA_DFSC_CAP_BOUND:
+			case ISS_DATA_DFSC_CAP_PERM:
+				return (0);
+			}
+#endif
+#endif
+
 			/* Flag a bad address. */
 			cpu_core[curcpu].cpuc_dtrace_flags |= CPU_DTRACE_BADADDR;
 			cpu_core[curcpu].cpuc_dtrace_illval = frame->tf_far;
