@@ -1398,9 +1398,9 @@ static intr_t *
 die_base_from_dwarf(dwarf_t *dw, Dwarf_Die base, Dwarf_Off off, size_t sz)
 {
 	intr_t *intr = xcalloc(sizeof (intr_t));
-	Dwarf_Signed enc;
+	Dwarf_Unsigned enc;
 
-	(void) die_signed(dw, base, DW_AT_encoding, &enc, DW_ATTR_REQ);
+	(void) die_unsigned(dw, base, DW_AT_encoding, &enc, DW_ATTR_REQ);
 
 	switch (enc) {
 	case DW_ATE_unsigned:
