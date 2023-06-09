@@ -96,10 +96,16 @@ END(dtrace_fuword32_nocheck)
 
 /*
 uint64_t
-dtrace_fuword64_nocheck(void *addr)
+dtrace_fuword64_nocheck(void * __capability addr)
 */
 ENTRY(dtrace_fuword64_nocheck)
+	ENTER_C64
+#if __has_feature(capabilities)
+	ldr	x0, [c0]
+#else
 	ldr	x0, [x0]
+#endif
+	EXIT_C64
 	RET
 END(dtrace_fuword64_nocheck)
 
