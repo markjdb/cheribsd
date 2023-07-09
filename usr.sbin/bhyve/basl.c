@@ -161,7 +161,7 @@ basl_finish_install_guest_tables(struct basl_table *const table, uint32_t *const
 	 */
 	gva = vm_map_gpa(table->ctx, BHYVE_ACPI_BASE + table->off, table->len);
 	if (gva == NULL) {
-		warnx("%s: could not map gpa [ 0x%16lx, 0x%16lx ]", __func__,
+		warnx("%s: could not map gpa [0x%016lx, 0x%016lx]", __func__,
 		    (uint64_t)BHYVE_ACPI_BASE + table->off,
 		    (uint64_t)BHYVE_ACPI_BASE + table->off + table->len);
 		return (ENOMEM);

@@ -1,8 +1,10 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2011 NetApp, Inc.
- * All rights reserved.
+ * Copyright (c) 2022 The FreeBSD Foundation
+ *
+ * This software was developed by Andrew Turner under sponsorship from
+ * the FreeBSD Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -13,10 +15,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY NETAPP, INC ``AS IS'' AND
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL NETAPP, INC OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -26,41 +28,20 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_BHYVERUN_H_
-#define	_BHYVERUN_H_
+#ifndef _FDT_H_
+#define	_FDT_H_
 
-#include <stdbool.h>
+#include <sys/types.h>
 
-#define	VMEXIT_CONTINUE		(0)
-#define	VMEXIT_ABORT		(-1)
-
-extern int guest_ncpus;
-extern uint16_t cpu_cores, cpu_sockets, cpu_threads;
-
-struct vcpu;
 struct vmctx;
-struct vm_run;
 
-void *paddr_guest2host(struct vmctx *ctx, uintptr_t addr, size_t len);
-#ifdef BHYVE_SNAPSHOT
-uintptr_t paddr_host2guest(struct vmctx *ctx, void *addr);
-#endif
+int	fdt_init(struct vmctx *ctx, int ncpu, vm_paddr_t addrp,
+	    vm_size_t size);
+void	fdt_add_gic(uint64_t dist_base, uint64_t dist_size,
+	    uint64_t redist_base, uint64_t redist_size);
+void	fdt_add_timer(void);
+void	fdt_add_pcie(int intr);
+void	fdt_add_uart(uint64_t uart_base, uint64_t uart_size, int intr);
+void	fdt_finalize(void);
 
-struct vcpu;
-struct vcpu *fbsdrun_vcpu(int vcpuid);
-void fbsdrun_addcpu(int vcpuid);
-void fbsdrun_deletecpu(int vcpuid);
-int fbsdrun_suspendcpu(int vcpuid);
-
-int  fbsdrun_virtio_msix(void);
-
-typedef int (*vmexit_handler_t)(struct vmctx *, struct vcpu *, struct vm_run *);
-
-/* Interfaces implemented by machine-dependent code. */
-void bhyve_init_config(void);
-void bhyve_init_vcpu(struct vcpu *vcpu);
-void bhyve_start_vcpu(struct vcpu *vcpu, bool bsp);
-int bhyve_init_platform(struct vmctx *ctx, struct vcpu *bsp);
-int bhyve_init_platform_late(struct vmctx *ctx, struct vcpu *bsp);
-
-#endif
+#endif	/* _FDT_H_ */
