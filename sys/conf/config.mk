@@ -9,6 +9,8 @@
 .if !defined(KERNBUILDDIR)
 opt_global.h:
 	touch ${.TARGET}
+	@echo "#define INVARIANTS 1" >> ${.TARGET}
+	@echo "#define INVARIANT_SUPPORT 1" >> ${.TARGET}
 	@echo "#define SMP 1" >> ${.TARGET}
 	@echo "#define MAC 1" >> ${.TARGET}
 	@echo "#define VIMAGE 1" >> ${.TARGET}
