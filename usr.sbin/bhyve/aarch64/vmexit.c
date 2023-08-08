@@ -242,12 +242,13 @@ static int
 vmexit_hyp(struct vmctx *ctx __unused, struct vcpu *vcpu __unused,
     struct vm_run *vmrun __unused)
 {
-#if 0
 	struct vm_exit *vme;
+
+	vme = vmrun->vm_exit;
+#if 0
 	uint64_t esr, exception;
 	int error;
 
-	vme = vmrun->vm_exit;
 	exception = ESR_ELx_EXCEPTION(vme->u.hyp.esr_el2);
 	switch (exception) {
 	case EXCP_INSN_ABORT_L:
