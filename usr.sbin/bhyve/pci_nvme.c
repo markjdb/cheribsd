@@ -2667,7 +2667,8 @@ nvme_opc_dataset_mgmt(struct pci_nvme_softc *sc,
 					    NVME_SC_LBA_OUT_OF_RANGE);
 					goto out;
 				}
-				iov[dr].iov_base = (void *)offset;
+				/* XXX-MJ */
+				iov[dr].iov_base = NULL; //(void *)offset;
 				iov[dr].iov_len = bytes;
 				dr++;
 			}
