@@ -621,7 +621,7 @@ vcpu_ioctl(struct vcpu *vcpu, u_long cmd, void *arg)
 }
 
 int
-vm_set_register(struct vcpu *vcpu, int reg, uint64_t val)
+vm_set_register(struct vcpu *vcpu, int reg, uintcap_t val)
 {
 	int error;
 	struct vm_register vmreg;
@@ -635,7 +635,7 @@ vm_set_register(struct vcpu *vcpu, int reg, uint64_t val)
 }
 
 int
-vm_get_register(struct vcpu *vcpu, int reg, uint64_t *ret_val)
+vm_get_register(struct vcpu *vcpu, int reg, uintcap_t *ret_val)
 {
 	int error;
 	struct vm_register vmreg;
@@ -650,7 +650,7 @@ vm_get_register(struct vcpu *vcpu, int reg, uint64_t *ret_val)
 
 int
 vm_set_register_set(struct vcpu *vcpu, unsigned int count,
-    const int *regnums, uint64_t *regvals)
+    const int *regnums, uintcap_t *regvals)
 {
 	int error;
 	struct vm_register_set vmregset;
@@ -666,7 +666,7 @@ vm_set_register_set(struct vcpu *vcpu, unsigned int count,
 
 int
 vm_get_register_set(struct vcpu *vcpu, unsigned int count,
-    const int *regnums, uint64_t *regvals)
+    const int *regnums, uintcap_t *regvals)
 {
 	int error;
 	struct vm_register_set vmregset;
