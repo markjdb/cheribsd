@@ -297,7 +297,7 @@ vmmops_modinit(int ipinum)
 	/* We need an physical identity mapping for when we activate the MMU */
 	hyp_code_base = vmm_base = vtophys(&vmm_hyp_code);
 	rv = vmmpmap_enter(vmm_base, hyp_code_len, vmm_base,
-	    VM_PROT_READ | VM_PROT_EXECUTE);
+	    VM_PROT_READ | VM_PROT_READ_CAP | VM_PROT_EXECUTE);
 	MPASS(rv);
 
 	next_hyp_va = roundup2(vmm_base + hyp_code_len, L2_SIZE);
@@ -310,7 +310,8 @@ vmmops_modinit(int ipinum)
 		for (i = 0; i < VMM_STACK_PAGES; i++) {
 			rv = vmmpmap_enter(stack_hyp_va[cpu] + ptoa(i),
 			    PAGE_SIZE, vtophys(stack[cpu] + ptoa(i)),
-			    VM_PROT_READ | VM_PROT_WRITE);
+			    VM_PROT_READ | VM_PROT_READ_CAP | VM_PROT_WRITE |
+			    VM_PROT_WRITE_CAP);
 			MPASS(rv);
 		}
 		next_hyp_va += L2_SIZE;
@@ -498,6 +499,7 @@ vmmops_init(struct vm *vm, pmap_t pmap)
 {
 	struct hyp *hyp;
 	vm_size_t size;
+	vm_prot_t prot;
 
 	size = el2_hyp_size(vm);
 	hyp = malloc_aligned(size, PAGE_SIZE, M_HYP, M_WAITOK | M_ZERO);
@@ -508,8 +510,11 @@ vmmops_init(struct vm *vm, pmap_t pmap)
 	vtimer_vminit(hyp);
 	vgic_vminit(hyp);
 
-	hyp->el2_addr = el2_map_enter((vm_offset_t)hyp, size,
-	    VM_PROT_READ | VM_PROT_WRITE);
+	prot = VM_PROT_READ | VM_PROT_WRITE;
+#if __has_feature(capabilities)
+	prot |= VM_PROT_READ_CAP | VM_PROT_WRITE_CAP;
+#endif
+	hyp->el2_addr = el2_map_enter((vm_offset_t)hyp, size, prot);
 
 	return (hyp);
 }
@@ -520,6 +525,7 @@ vmmops_vcpu_init(void *vmi, struct vcpu *vcpu1, int vcpuid)
 	struct hyp *hyp = vmi;
 	struct hypctx *hypctx;
 	vm_size_t size;
+	vm_prot_t prot;
 
 	size = el2_hypctx_size();
 	hypctx = malloc_aligned(size, PAGE_SIZE, M_HYP, M_WAITOK | M_ZERO);
@@ -537,8 +543,11 @@ vmmops_vcpu_init(void *vmi, struct vcpu *vcpu1, int vcpuid)
 	vtimer_cpuinit(hypctx);
 	vgic_cpuinit(hypctx);
 
-	hypctx->el2_addr = el2_map_enter((vm_offset_t)hypctx, size,
-	    VM_PROT_READ | VM_PROT_WRITE);
+	prot = VM_PROT_READ | VM_PROT_WRITE;
+#if __has_feature(capabilities)
+	prot |= VM_PROT_READ_CAP | VM_PROT_WRITE_CAP;
+#endif
+	hypctx->el2_addr = el2_map_enter((vm_offset_t)hypctx, size, prot);
 
 	return (hypctx);
 }
