@@ -719,7 +719,7 @@ vm_s2_tlbi_all(uint64_t vttbr)
 }
 
 static int
-vmm_dc_civac(uint64_t start, uint64_t len)
+vmm_dc_civac(uintptr_t start, uint64_t len)
 {
 	size_t line_size, end;
 	uint64_t ctr;
@@ -730,7 +730,11 @@ vmm_dc_civac(uint64_t start, uint64_t len)
 	dsb(ishst);
 	/* Clean and Invalidate the D-cache */
 	for (; start < end; start += line_size)
+#ifdef __CHERI_PURE_CAPABILITY__
+		__asm __volatile("dc	civac, %0" :: "C" (start) : "memory");
+#else
 		__asm __volatile("dc	civac, %0" :: "r" (start) : "memory");
+#endif
 	dsb(ish);
 	return (0);
 }
