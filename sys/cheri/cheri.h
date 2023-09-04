@@ -107,6 +107,14 @@ extern void * __capability swap_restore_cap;
 #ifdef __CHERI_PURE_CAPABILITY__
 /* Root kernel capability */
 extern void * __capability kernel_root_cap;
+#ifdef __aarch64__
+/* Root capability for EL2 address space used by vmm. */
+extern void * __capability vmm_el2_root_cap;
+/* Root capability for vmm guest physical address spaces. */
+extern void * __capability vmm_gpa_root_cap;
+/* Root capability for vmm guest virtual address spaces. */
+extern void * __capability vmm_gva_root_cap;
+#endif
 #endif
 
 /* Root of all sealed kernel capabilities. */

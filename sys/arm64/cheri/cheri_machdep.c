@@ -38,6 +38,7 @@
 #include <cheri/cheri.h>
 #include <cheri/cheric.h>
 
+#include <arm64/vmm/hyp.h>
 #include <machine/frame.h>
 #include <machine/pte.h>
 #include <machine/vmparam.h>
@@ -46,6 +47,9 @@ void * __capability sentry_unsealcap;
 void * __capability smccc_ddc_el0;
 #ifdef __CHERI_PURE_CAPABILITY__
 void *kernel_root_cap = (void *)(intcap_t)-1;
+void *vmm_el2_root_cap = (void *)(intcap_t)-1;
+void *vmm_gpa_root_cap = (void *)(intcap_t)-1;
+void *vmm_gva_root_cap = (void *)(intcap_t)-1;
 #endif
 
 void __nosanitizecoverage
@@ -92,6 +96,16 @@ cheri_init_capabilities(void * __capability kroot)
 
 	kernel_root_cap = cheri_andperm(kroot,
 	    ~(CHERI_PERM_SEAL | CHERI_PERM_UNSEAL));
+
+	vmm_el2_root_cap = cheri_setaddress(kroot, HYP_VM_MIN_ADDRESS);
+	vmm_el2_root_cap = cheri_setbounds(vmm_el2_root_cap,
+	    HYP_VM_MAX_ADDRESS - HYP_VM_MIN_ADDRESS);
+
+	vmm_gpa_root_cap = cheri_setaddress(kroot, HYP_GPA_MIN_ADDRESS);
+	vmm_gpa_root_cap = cheri_setbounds(vmm_gpa_root_cap,
+	    HYP_GPA_MAX_ADDRESS - HYP_GPA_MIN_ADDRESS);
+
+	vmm_gva_root_cap = kroot;
 #endif
 }
 
