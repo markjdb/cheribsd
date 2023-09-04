@@ -875,21 +875,21 @@ vm_gla2gpa_nofault(struct vcpu *vcpu, uint64_t gla, int prot, uint64_t *gpa,
 }
 
 static int
-vmm_reg_raz(struct vcpu *vcpu, uint64_t *rval, void *arg)
+vmm_reg_raz(struct vcpu *vcpu, uintcap_t *rval, void *arg)
 {
 	*rval = 0;
 	return (0);
 }
 
 static int
-vmm_reg_read_arg(struct vcpu *vcpu, uint64_t *rval, void *arg)
+vmm_reg_read_arg(struct vcpu *vcpu, uintcap_t *rval, void *arg)
 {
 	*rval = *(uint64_t *)arg;
 	return (0);
 }
 
 static int
-vmm_reg_wi(struct vcpu *vcpu, uint64_t wval, void *arg)
+vmm_reg_wi(struct vcpu *vcpu, uintcap_t wval, void *arg)
 {
 	return (0);
 }
@@ -1150,7 +1150,7 @@ vm_suspend(struct vm *vm, enum vm_suspend_how how)
 }
 
 void
-vm_exit_suspended(struct vcpu *vcpu, uint64_t pc)
+vm_exit_suspended(struct vcpu *vcpu, uintcap_t pc)
 {
 	struct vm *vm = vcpu->vm;
 	struct vm_exit *vmexit;
@@ -1166,7 +1166,7 @@ vm_exit_suspended(struct vcpu *vcpu, uint64_t pc)
 }
 
 void
-vm_exit_debug(struct vcpu *vcpu, uint64_t pc)
+vm_exit_debug(struct vcpu *vcpu, uintcap_t pc)
 {
 	struct vm_exit *vmexit;
 
@@ -1561,7 +1561,7 @@ vm_gpa_release(void *cookie)
 }
 
 int
-vm_get_register(struct vcpu *vcpu, int reg, uint64_t *retval)
+vm_get_register(struct vcpu *vcpu, int reg, uintcap_t *retval)
 {
 
 	if (reg >= VM_REG_LAST)
@@ -1571,7 +1571,7 @@ vm_get_register(struct vcpu *vcpu, int reg, uint64_t *retval)
 }
 
 int
-vm_set_register(struct vcpu *vcpu, int reg, uint64_t val)
+vm_set_register(struct vcpu *vcpu, int reg, uintcap_t val)
 {
 	int error;
 

@@ -311,7 +311,7 @@ done:
 
 static int
 vm_get_register_set(struct vcpu *vcpu, unsigned int count, int *regnum,
-    uint64_t *regval)
+    uintcap_t *regval)
 {
 	int error, i;
 
@@ -326,7 +326,7 @@ vm_get_register_set(struct vcpu *vcpu, unsigned int count, int *regnum,
 
 static int
 vm_set_register_set(struct vcpu *vcpu, unsigned int count, int *regnum,
-    uint64_t *regval)
+    uintcap_t *regval)
 {
 	int error, i;
 
@@ -363,7 +363,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	struct vm_memmap *mm;
 	struct vm_msi *vmsi;
 	struct vm_cpu_topology *topology;
-	uint64_t *regvals;
+	uintcap_t *regvals;
 	int *regnums;
 	enum { NONE, SINGLE, ALL } vcpus_locked;
 	bool memsegs_locked;

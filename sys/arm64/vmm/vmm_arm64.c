@@ -1159,7 +1159,7 @@ hypctx_regptr(struct hypctx *hypctx, int reg)
 }
 
 int
-vmmops_getreg(void *vcpui, int reg, uint64_t *retval)
+vmmops_getreg(void *vcpui, int reg, uintcap_t *retval)
 {
 	void *regp;
 	int running, hostcpu;
@@ -1174,7 +1174,7 @@ vmmops_getreg(void *vcpui, int reg, uint64_t *retval)
 		if (reg == VM_REG_GUEST_SPSR)
 			*retval = *(uint32_t *)regp;
 		else
-			*retval = *(uint64_t *)regp;
+			*retval = *(uintcap_t *)regp;
 		return (0);
 	} else {
 		return (EINVAL);
@@ -1182,7 +1182,7 @@ vmmops_getreg(void *vcpui, int reg, uint64_t *retval)
 }
 
 int
-vmmops_setreg(void *vcpui, int reg, uint64_t val)
+vmmops_setreg(void *vcpui, int reg, uintcap_t val)
 {
 	void *regp;
 	struct hypctx *hypctx = vcpui;
@@ -1209,7 +1209,7 @@ vmmops_setreg(void *vcpui, int reg, uint64_t val)
 		}
 #endif
 		else
-			*(uint64_t *)regp = val;
+			*(uintcap_t *)regp = val;
 		return (0);
 	} else {
 		return (EINVAL);
