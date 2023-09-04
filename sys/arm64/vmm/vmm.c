@@ -78,7 +78,7 @@ struct vcpu {
 	int		vcpuid;
 	void		*stats;
 	struct vm_exit	exitinfo;
-	uint64_t	nextpc;		/* (x) next instruction to execute */
+	uintcap_t	nextpc;		/* (x) next instruction to execute */
 	struct vm	*vm;		/* (o) */
 	void		*cookie;	/* (i) cpu-specific data */
 	struct vfpstate	*guestfpu;	/* (a,i) guest fpu state */
@@ -1581,7 +1581,15 @@ vm_set_register(struct vcpu *vcpu, int reg, uint64_t val)
 	if (error || reg != VM_REG_ELR_EL2)
 		return (error);
 
+#if __has_feature(capabilities)
+#ifdef __CHERI_PURE_CAPABILITY__
+	vcpu->nextpc = (uintcap_t)cheri_setaddress(kernel_root_cap, val);
+#else
+	vcpu->nextpc = (uintcap_t)cheri_setaddress(cheri_getpcc(), val);
+#endif
+#else
 	vcpu->nextpc = val;
+#endif
 
 	return(0);
 }
