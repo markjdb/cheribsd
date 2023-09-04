@@ -57,6 +57,8 @@
 #include <machine/hypervisor.h>
 #include <machine/pmap.h>
 
+#include <cheri/cheri.h>
+
 #include "mmu.h"
 #include "arm64.h"
 #include "hyp.h"
@@ -97,7 +99,7 @@ static vm_paddr_t hyp_code_base;
 static size_t hyp_code_len;
 
 static char *stack[MAXCPU];
-static vm_offset_t stack_hyp_va[MAXCPU];
+static vm_pointer_t stack_hyp_va[MAXCPU];
 
 static vmem_t *el2_mem_alloc;
 
@@ -221,6 +223,40 @@ vmm_vtcr_el2_sl(u_int levels)
 #endif
 }
 
+/*
+ * Add a chunk of virtual memory to the EL2 vmem arena.  In purecap kernels we
+ * align the base address to ensure that representability constraints don't
+ * cause the chunk to cover an allocated portion of the address space.
+ */
+static void
+el2_vmem_add(vm_offset_t base, vm_size_t size)
+{
+	vm_pointer_t basep, end;
+	vm_size_t align, nsize;
+
+#ifdef __CHERI_PURE_CAPABILITY__
+	end = base + size;
+
+	align = CHERI_REPRESENTABLE_ALIGNMENT(size);
+	basep = roundup2(base, align);
+
+	nsize = CHERI_REPRESENTABLE_LENGTH(end - basep);
+	while (nsize > end - basep)
+		nsize >>= 1;
+	size = nsize;
+
+	basep = (vm_pointer_t)cheri_setaddress(vmm_el2_root_cap, basep);
+	basep = (vm_pointer_t)cheri_setboundsexact(vmm_el2_root_cap, size);
+#else
+	(void)align;
+	(void)end;
+	(void)nsize;
+	basep = base;
+#endif
+
+	vmem_add(el2_mem_alloc, basep, size, M_WAITOK);
+}
+
 int
 vmmops_modinit(int ipinum)
 {
@@ -305,9 +341,19 @@ vmmops_modinit(int ipinum)
 
 	/* Create a per-CPU hypervisor stack */
 	CPU_FOREACH(cpu) {
-		stack[cpu] = malloc(VMM_STACK_SIZE, M_HYP, M_WAITOK | M_ZERO);
-		stack_hyp_va[cpu] = next_hyp_va;
+		vm_pointer_t stack_base;
 
+		stack[cpu] = malloc(VMM_STACK_SIZE, M_HYP, M_WAITOK | M_ZERO);
+#ifdef __CHERI_PURE_CAPABILITY__
+		stack_base = (vm_pointer_t)cheri_setaddress(vmm_el2_root_cap,
+		    next_hyp_va);
+		stack_base = (vm_pointer_t)cheri_setboundsexact(stack_base,
+		    VMM_STACK_SIZE);
+#else
+		stack_base = next_hyp_va;
+#endif
+
+		stack_hyp_va[cpu] = stack_base;
 		for (i = 0; i < VMM_STACK_PAGES; i++) {
 			rv = vmmpmap_enter(stack_hyp_va[cpu] + ptoa(i),
 			    PAGE_SIZE, vtophys(stack[cpu] + ptoa(i)),
@@ -416,8 +462,7 @@ vmmops_modinit(int ipinum)
 		 * raise an exception.
 		 */
 		if (vmm_base > L2_SIZE)
-			vmem_add(el2_mem_alloc, L2_SIZE, vmm_base - L2_SIZE,
-			    M_WAITOK);
+			el2_vmem_add(L2_SIZE, vmm_base - L2_SIZE);
 	}
 
 	/*
@@ -426,8 +471,7 @@ vmmops_modinit(int ipinum)
 	 * be safe without adding more padding.
 	 */
 	if (next_hyp_va < HYP_VM_MAX_ADDRESS - PAGE_SIZE)
-		vmem_add(el2_mem_alloc, next_hyp_va,
-		    HYP_VM_MAX_ADDRESS - next_hyp_va, M_WAITOK);
+		el2_vmem_add(next_hyp_va, HYP_VM_MAX_ADDRESS - next_hyp_va);
 
 	daif = intr_disable();
 	cnthctl_el2 = vmm_call_hyp(HYP_READ_REGISTER, HYP_REG_CNTHCTL);
