@@ -49,6 +49,9 @@
 #include <vm/vm_extern.h>
 #include <vm/vm_param.h>
 
+#include <cheri/cheri.h>
+#include <cheri/cheric.h>
+
 #include <machine/armreg.h>
 #include <machine/cpu.h>
 #include <machine/fpu.h>
@@ -679,6 +682,7 @@ vm_alloc_memseg(struct vm *vm, int ident, size_t len, bool sysmem)
 	obj = vm_object_allocate(OBJT_DEFAULT, len >> PAGE_SHIFT);
 	if (obj == NULL)
 		return (ENOMEM);
+	vm_object_set_flag(obj, OBJ_HASCAP);
 
 	seg->len = len;
 	seg->object = obj;
@@ -729,10 +733,14 @@ vm_mmap_memseg(struct vm *vm, vm_paddr_t gpa, int segid, vm_ooffset_t first,
 	struct mem_seg *seg;
 	struct mem_map *m, *map;
 	vm_ooffset_t last;
+	vm_pointer_t gpap;
 	int i, error;
 
 	if (prot == 0 || (prot & ~(VM_PROT_ALL)) != 0)
 		return (EINVAL);
+#if __has_feature(capabilities)
+	prot = VM_PROT_ADD_CAP(prot);
+#endif
 
 	if (flags & ~VM_MEMMAP_F_WIRED)
 		return (EINVAL);
@@ -763,10 +771,12 @@ vm_mmap_memseg(struct vm *vm, vm_paddr_t gpa, int segid, vm_ooffset_t first,
 	if (map == NULL)
 		return (ENOSPC);
 
-	error = vm_map_find(&vm->vmspace->vm_map, seg->object, first, &gpa,
+	gpap = gpa;
+	error = vm_map_find(&vm->vmspace->vm_map, seg->object, first, &gpap,
 	    len, 0, VMFS_NO_SPACE, prot, prot, 0);
 	if (error != KERN_SUCCESS)
 		return (EFAULT);
+	gpa = gpap;
 
 	vm_object_reference(seg->object);
 
@@ -1505,15 +1515,24 @@ _vm_gpa_hold(struct vm *vm, vm_paddr_t gpa, size_t len, int reqprot,
 		mm = &vm->mem_maps[i];
 		if (sysmem_mapping(vm, mm) && gpa >= mm->gpa &&
 		    gpa < mm->gpa + mm->len) {
+			vm_pointer_t gpap;
+
+			gpap = trunc_page(gpa);
+#ifdef __CHERI_PURE_CAPABILITY__
+			gpap = (vm_pointer_t)cheri_setaddress(vmm_gpa_root_cap,
+			    gpap);
+#endif
 			count = vm_fault_quick_hold_pages(&vm->vmspace->vm_map,
-			    trunc_page(gpa), PAGE_SIZE, reqprot, &m, 1);
+			    (void * __capability)gpap, PAGE_SIZE, reqprot, &m,
+			    1);
 			break;
 		}
 	}
 
 	if (count == 1) {
 		*cookie = m;
-		return ((void *)(PHYS_TO_DMAP(VM_PAGE_TO_PHYS(m)) + pageoff));
+		return (cheri_kern_setbounds(
+		    (void *)(PHYS_TO_DMAP(VM_PAGE_TO_PHYS(m)) + pageoff), len));
 	} else {
 		*cookie = NULL;
 		return (NULL);
@@ -1698,6 +1717,9 @@ vm_handle_paging(struct vcpu *vcpu, bool *retu)
 	case EXCP_INSN_ABORT_L:
 	case EXCP_DATA_ABORT_L:
 		ftype = VM_PROT_EXECUTE | VM_PROT_READ | VM_PROT_WRITE;
+#if __has_feature(capabilities)
+		ftype |= VM_PROT_READ_CAP | VM_PROT_WRITE_CAP;
+#endif
 		break;
 	default:
 		panic("%s: Invalid exception (esr = %lx)", __func__, esr);
