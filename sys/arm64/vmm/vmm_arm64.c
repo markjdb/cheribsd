@@ -120,6 +120,7 @@ arm_setup_vectors(void *arg)
 	uintptr_t stack_top;
 	uint32_t sctlr_el2;
 	register_t daif;
+	uintcap_t codep;
 
 	el2_regs = arg;
 	arm64_set_active_vcpu(NULL);
@@ -133,7 +134,16 @@ arm_setup_vectors(void *arg)
 	 * x0: the exception vector table responsible for hypervisor
 	 * initialization on the next call.
 	 */
-	vmm_call_hyp0(vtophys(&vmm_hyp_code));
+#ifdef __CHERI_PURE_CAPABILITY__
+	codep = (uintcap_t)cheri_setaddress(kernel_root_cap,
+	    vtophys(&vmm_hyp_code));
+	codep = cheri_andperm(codep, cheri_getperm(cheri_getpcc()));
+#else
+	codep = (uintcap_t)cheri_setaddress(cheri_getpcc(),
+	    vtophys(&vmm_hyp_code));
+#endif
+	codep = (uintcap_t)cheri_setbounds(codep, hyp_code_len);
+	vmm_call_hyp_init(codep);
 
 	/* Create and map the hypervisor stack */
 	stack_top = stack_hyp_va[PCPU_GET(cpuid)] + VMM_STACK_SIZE;
@@ -165,6 +175,7 @@ arm_setup_vectors(void *arg)
 static void
 arm_teardown_vectors(void *arg)
 {
+	vm_pointer_t codep;
 	register_t daif;
 
 	/*
@@ -183,7 +194,13 @@ arm_teardown_vectors(void *arg)
 	 */
 	daif = intr_disable();
 	/* TODO: Invalidate the cache */
-	vmm_call_hyp1(HYP_CLEANUP, vtophys(hyp_stub_vectors));
+#ifdef __CHERI_PURE_CAPABILITY__
+	codep = (vm_pointer_t)cheri_setaddress(kernel_root_cap,
+	    vtophys(hyp_stub_vectors));
+#else
+	codep = vtophys(hyp_stub_vectors);
+#endif
+	vmm_call_hyp1(HYP_CLEANUP, codep);
 	intr_restore(daif);
 
 	arm64_set_active_vcpu(NULL);
