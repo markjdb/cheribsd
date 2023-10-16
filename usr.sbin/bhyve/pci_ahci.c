@@ -2611,7 +2611,7 @@ pci_ahci_snapshot(struct vm_snapshot_meta *meta)
 		/* Mostly for restore; save is ensured by the lines above. */
 		if (((bctx == NULL) && (port->bctx != NULL)) ||
 		    ((bctx != NULL) && (port->bctx == NULL))) {
-			fprintf(stderr, "%s: ports not matching\r\n", __func__);
+			EPRINTLN("%s: ports not matching", __func__);
 			ret = EINVAL;
 			goto done;
 		}
@@ -2620,9 +2620,8 @@ pci_ahci_snapshot(struct vm_snapshot_meta *meta)
 			continue;
 
 		if (port->port != i) {
-			fprintf(stderr, "%s: ports not matching: "
-					"actual: %d expected: %d\r\n",
-					__func__, port->port, i);
+			EPRINTLN("%s: ports not matching: "
+			    "actual: %d expected: %d", __func__, port->port, i);
 			ret = EINVAL;
 			goto done;
 		}
