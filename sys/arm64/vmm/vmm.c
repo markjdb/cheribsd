@@ -1591,7 +1591,9 @@ vm_set_register(struct vcpu *vcpu, int reg, uintcap_t val)
 
 #if __has_feature(capabilities)
 #ifdef __CHERI_PURE_CAPABILITY__
-	vcpu->nextpc = (uintcap_t)cheri_setaddress(kernel_root_cap, val);
+	vcpu->nextpc = (uintcap_t)cheri_andperm(
+	    cheri_setaddress(kernel_root_cap, val),
+	    cheri_getperm(cheri_getpcc()));
 #else
 	vcpu->nextpc = (uintcap_t)cheri_setaddress(cheri_getpcc(), val);
 #endif
