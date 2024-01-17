@@ -5,8 +5,9 @@ FILESDIR=	${SHAREDIR}/bhyve/gdb
 FILES+=		amd64.xml
 .endif
 
-.if ${MACHINE_ARCH} == "aarch64"
-FILES+=		aarch64-core.xml
+.if ${MACHINE} == "arm64"
+FILES+=		aarch64-core.xml	\
+		aarch64-capability.xml
 .endif
 
 .include <bsd.prog.mk>

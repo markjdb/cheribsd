@@ -1350,6 +1350,14 @@ hypctx_regptr(struct hypctx *hypctx, int reg)
 		return (&hypctx->tcr_el1);
 	case VM_REG_GUEST_TCR2_EL1:
 		return (&hypctx->tcr2_el1);
+	case VM_REG_GUEST_TPIDR_EL1:
+		return (&hypctx->tpidr_el1);
+#if __has_feature(capabilities)
+	case VM_REG_GUEST_PCC:
+		return (&hypctx->tf.tf_elr); /* XXX-MJ */
+	case VM_REG_GUEST_DCC:
+		return (&hypctx->tf.tf_ddc);
+#endif
 	default:
 		break;
 	}

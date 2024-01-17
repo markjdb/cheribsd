@@ -78,7 +78,11 @@
 #define	GDB_TARGET_XML_PATH	"/usr/share/bhyve/gdb/amd64.xml"
 #elif defined(__aarch64__)
 #define	GDB_TARGET_ARCH		"aarch64"
+#if __has_feature(capabilities)
+#define	GDB_TARGET_XML_PATH	"/usr/share/bhyve/gdb/aarch64-capability.xml"
+#else
 #define	GDB_TARGET_XML_PATH	"/usr/share/bhyve/gdb/aarch64-core.xml"
+#endif
 #else
 #error "Unsupported architecture"
 #endif
@@ -237,6 +241,81 @@ static const int gdb_regsize[] = {
 #endif
 
 #ifdef __aarch64__
+
+#if __has_feature(capabilities)
+static const int gdb_regset[] = {
+	VM_REG_GUEST_C0,
+	VM_REG_GUEST_C1,
+	VM_REG_GUEST_C2,
+	VM_REG_GUEST_C3,
+	VM_REG_GUEST_C4,
+	VM_REG_GUEST_C5,
+	VM_REG_GUEST_C6,
+	VM_REG_GUEST_C7,
+	VM_REG_GUEST_C8,
+	VM_REG_GUEST_C9,
+	VM_REG_GUEST_C10,
+	VM_REG_GUEST_C11,
+	VM_REG_GUEST_C12,
+	VM_REG_GUEST_C13,
+	VM_REG_GUEST_C14,
+	VM_REG_GUEST_C15,
+	VM_REG_GUEST_C16,
+	VM_REG_GUEST_C17,
+	VM_REG_GUEST_C18,
+	VM_REG_GUEST_C19,
+	VM_REG_GUEST_C20,
+	VM_REG_GUEST_C21,
+	VM_REG_GUEST_C22,
+	VM_REG_GUEST_C23,
+	VM_REG_GUEST_C24,
+	VM_REG_GUEST_C25,
+	VM_REG_GUEST_C26,
+	VM_REG_GUEST_C27,
+	VM_REG_GUEST_C28,
+	VM_REG_GUEST_C29,
+	VM_REG_GUEST_C30,
+	VM_REG_GUEST_CSP,
+	VM_REG_GUEST_PCC,
+	VM_REG_GUEST_DCC,
+};
+static const int gdb_regsize[] = {
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+	16,
+};
+#else
 static const int gdb_regset[] = {
 	VM_REG_GUEST_X0,
 	VM_REG_GUEST_X1,
@@ -310,6 +389,7 @@ static const int gdb_regsize[] = {
 	8,
 	4,
 };
+#endif /* !__has_feature(capabilities) */
 #endif
 
 _Static_assert(sizeof(gdb_regset) == sizeof(gdb_regsize),
