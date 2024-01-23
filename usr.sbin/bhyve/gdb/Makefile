@@ -1,3 +1,5 @@
+.include <src.opts.mk>
+
 PACKAGE=	bhyve
 FILESDIR=	${SHAREDIR}/bhyve/gdb
 
@@ -5,8 +7,11 @@ FILESDIR=	${SHAREDIR}/bhyve/gdb
 FILES+=		amd64.xml
 .endif
 
-.if ${MACHINE_ARCH} == "aarch64"
+.if ${MACHINE} == "arm64"
 FILES+=		aarch64-core.xml
+.if ${MACHINE_ABI:Mpurecap}
+FILES+=		aarch64-capability.xml
+.endif
 .endif
 
 .include <bsd.prog.mk>

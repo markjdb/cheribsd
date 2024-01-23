@@ -94,6 +94,7 @@
 #define	GDB_BREAKPOINT_CAP	VM_CAP_BRK_EXIT
 #define	GDB_XML_ARCH		"aarch64"
 #define	GDB_XML_BASE		"aarch64-core.xml"
+#define	GDB_XML_BASE_AUX	"aarch64-capability.xml"
 #else
 #error "Unsupported architecture"
 #endif
@@ -1749,6 +1750,9 @@ gdb_query(const uint8_t *data, size_t len)
 			    "<target>"
 			    "<architecture>" GDB_XML_ARCH "</architecture>"
 			    "<xi:include href=\"" GDB_XML_BASE "\"/>"
+#ifdef GDB_XML_BASE_AUX
+			    "<xi:include href=\"" GDB_XML_BASE_AUX "\"/>"
+#endif
 			    "</target>";
 			xmllen = strlen(xml);
 			unmap = false;
