@@ -1,3 +1,5 @@
+.include <src.opts.mk>
+
 PACKAGE=	bhyve
 FILESDIR=	${SHAREDIR}/bhyve/gdb
 
@@ -9,6 +11,9 @@ FILES+=		amd64.xml
 .elif ${MACHINE_ARCH} == "aarch64"
 XMLARCH=	aarch64
 FILES+=		aarch64-core.xml
+.if ${MACHINE_ABI:Mpurecap}
+FILES+=		aarch64-capability.xml
+.endif
 .endif
 
 target.xml: .PHONY
