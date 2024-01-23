@@ -80,6 +80,7 @@ CFLAGS+= -DBHYVE_GDB
 .ifdef GDB_LOG
 CFLAGS+=-DGDB_LOG
 .endif
+SUBDIR+= gdb
 .endif
 
 CFLAGS+=-I${.CURDIR}		\
