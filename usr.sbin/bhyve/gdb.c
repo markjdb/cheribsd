@@ -92,6 +92,8 @@
 #define	GDB_BP_INSTR		(uint8_t []){0x00, 0x00, 0x20, 0xd4}
 #define	GDB_PC_REGNAME		VM_REG_GUEST_PC
 #define	GDB_BREAKPOINT_CAP	VM_CAP_BRK_EXIT
+#define	GDB_XML_ARCH		"aarch64"
+#define	GDB_XML_BASE		"aarch64-core.xml"
 #else
 #error "Unsupported architecture"
 #endif
@@ -1164,9 +1166,11 @@ gdb_read_regs(void)
 
 	start_packet();
 	for (size_t i = 0; i < nitems(gdb_regset); i++) {
+#ifdef GDB_REG_FIRST_EXT
 		if (!target_descr_enabled &&
 		    gdb_regset[i].id == GDB_REG_FIRST_EXT)
 			break;
+#endif
 		append_unsigned_native(regvals[i], gdb_regset[i].size);
 	}
 	finish_packet();
