@@ -35,6 +35,7 @@
 #include <sys/mman.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #ifdef __aarch64__
 #include <machine/armreg.h>
@@ -71,6 +72,8 @@
 #include "mem.h"
 #include "mevent.h"
 
+#define	_PATH_GDB_XML		"/usr/share/bhyve/gdb"
+
 /*
  * GDB_SIGNAL_* numbers are part of the GDB remote protocol.  Most stops
  * use SIGTRAP.
@@ -82,6 +85,8 @@
 #define	GDB_BP_INSTR		(uint8_t []){0xcc}
 #define	GDB_PC_REGNAME		VM_REG_GUEST_RIP
 #define	GDB_BREAKPOINT_CAP	VM_CAP_BPT_EXIT
+#define	GDB_XML_ARCH		"i386:x86-64"
+#define	GDB_XML_BASE		"amd64.xml"
 #elif defined(__aarch64__)
 #define	GDB_BP_SIZE		4
 #define	GDB_BP_INSTR		(uint8_t []){0x00, 0x00, 0x20, 0xd4}
@@ -102,6 +107,7 @@ static cpuset_t vcpus_active, vcpus_suspended, vcpus_waiting;
 static pthread_mutex_t gdb_lock;
 static pthread_cond_t idle_vcpus;
 static bool first_stop, report_next_stop, swbreak_enabled;
+static int xml_dfd = -1;
 
 /*
  * An I/O buffer contains 'capacity' bytes of room at 'data'.  For a
@@ -229,6 +235,7 @@ static const gdb_regset[] = {
 };
 #endif
 
+#define	GDB_LOG
 #ifdef GDB_LOG
 #include <stdarg.h>
 #include <stdio.h>
@@ -1604,6 +1611,7 @@ check_features(const uint8_t *data, size_t len)
 	/* This is an arbitrary limit. */
 	append_string("PacketSize=4096");
 	append_string(";swbreak+");
+	append_string(";qXfer:features:read+");
 	finish_packet();
 }
 
@@ -1675,6 +1683,89 @@ gdb_query(const uint8_t *data, size_t len)
 		start_packet();
 		append_asciihex(buf);
 		finish_packet();
+	} else if (command_equals(data, len, "qXfer:features:read:")) {
+		const char *xml;
+		const uint8_t *pathend;
+		char buf[64], path[PATH_MAX];
+		size_t xmllen;
+		unsigned int doff, dlen;
+		bool unmap;
+
+		data += strlen("qXfer:features:read:");
+		len -= strlen("qXfer:features:read:");
+
+		pathend = memchr(data, ':', len);
+		if (pathend == NULL ||
+		    (size_t)(pathend - data) >= sizeof(path) - 1) {
+			send_error(EINVAL);
+			return;
+		}
+		memcpy(path, data, pathend - data);
+		path[pathend - data] = '\0';
+		data += (pathend - data) + 1;
+		len -= (pathend - data) + 1;
+
+		if (len > sizeof(buf) - 1) {
+			send_error(EINVAL);
+			return;
+		}
+		memcpy(buf, data, len);
+		buf[len] = '\0';
+		if (sscanf(buf, "%x,%x", &doff, &dlen) != 2) {
+			send_error(EINVAL);
+			return;
+		}
+
+		if (strcmp(path, "target.xml") == 0) {
+			xml =
+			    "<?xml version=\"1.0\"?>"
+			    "<!DOCTYPE target SYSTEM \"gdb-target.dtd\">"
+			    "<target>"
+			    "<architecture>" GDB_XML_ARCH "</architecture>"
+			    "<xi:include href=\"" GDB_XML_BASE "\"/>"
+			    "</target>";
+			xmllen = strlen(xml);
+			unmap = false;
+		} else {
+			struct stat sb;
+			int fd;
+
+			fd = openat(xml_dfd, path, O_RDONLY);
+			if (fd < 0) {
+				send_error(errno);
+				return;
+			}
+			if (fstat(fd, &sb) < 0) {
+				send_error(errno);
+				close(fd);
+				return;
+			}
+			xml = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED,
+			    fd, 0);
+			if (xml == MAP_FAILED) {
+				send_error(errno);
+				close(fd);
+				return;
+			}
+			unmap = true;
+			xmllen = sb.st_size;
+			close(fd);
+		}
+
+		start_packet();
+		if (doff >= xmllen) {
+			append_char('l');
+			dlen = 0;
+		} else if (doff + dlen >= xmllen) {
+			append_char('l');
+			append_packet_data(xml + doff, xmllen - doff);
+		} else {
+			append_char('m');
+			append_packet_data(xml + doff, dlen);
+		}
+		finish_packet();
+		if (unmap)
+			(void)munmap(__DECONST(void *, xml), xmllen);
 	} else
 		send_empty_response();
 }
@@ -2001,6 +2092,9 @@ limit_gdb_socket(int s)
 void
 init_gdb(struct vmctx *_ctx)
 {
+#ifndef WITHOUT_CAPSICUM
+	cap_rights_t rights;
+#endif
 	int error, flags, optval, s;
 	struct addrinfo hints;
 	struct addrinfo *gdbaddr;
@@ -2081,4 +2175,13 @@ init_gdb(struct vmctx *_ctx)
 	gdb_active = true;
 	freeaddrinfo(gdbaddr);
 	free(sport);
+
+	xml_dfd = open(_PATH_GDB_XML, O_DIRECTORY);
+	if (xml_dfd == -1)
+		err(1, "Failed to open gdb xml directory");
+#ifndef WITHOUT_CAPSICUM
+	cap_rights_init(&rights, CAP_FSTAT, CAP_LOOKUP, CAP_MMAP_R, CAP_PREAD);
+	if (caph_rights_limit(xml_dfd, &rights) == -1)
+		err(1, "cap_rights_init");
+#endif
 }
