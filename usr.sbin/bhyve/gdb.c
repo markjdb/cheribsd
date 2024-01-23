@@ -163,6 +163,7 @@ static struct vcpu_state *vcpu_state;
 static struct vcpu **vcpus;
 static int cur_vcpu, stopped_vcpu;
 static bool gdb_active = false;
+static bool target_descr_enabled;
 
 struct gdb_reg {
 	enum vm_reg_name id;
@@ -195,6 +196,21 @@ static const gdb_regset[] = {
 	{ .id = VM_REG_GUEST_ES, .size = 4 },
 	{ .id = VM_REG_GUEST_FS, .size = 4 },
 	{ .id = VM_REG_GUEST_GS, .size = 4 },
+	/*
+	 * Registers past this point are included only when remote target
+	 * descriptions are enabled.  The list must be kept in sync with the
+	 * correpsonding XML definitions.
+	 */
+#define	GDB_REG_FIRST_EXT	VM_REG_GUEST_FS_BASE
+	{ .id = VM_REG_GUEST_FS_BASE, .size = 8 },
+	{ .id = VM_REG_GUEST_GS_BASE, .size = 8 },
+	{ .id = VM_REG_GUEST_KGS_BASE, .size = 8 },
+	{ .id = VM_REG_GUEST_CR0, .size = 8 },
+	{ .id = VM_REG_GUEST_CR2, .size = 8 },
+	{ .id = VM_REG_GUEST_CR3, .size = 8 },
+	{ .id = VM_REG_GUEST_CR4, .size = 8 },
+	{ .id = VM_REG_GUEST_TPR, .size = 8 },
+	{ .id = VM_REG_GUEST_EFER, .size = 8 },
 };
 #else /* __aarch64__ */
 static const gdb_regset[] = {
@@ -472,6 +488,7 @@ close_connection(void)
 	io_buffer_reset(&cur_comm);
 	io_buffer_reset(&cur_resp);
 	cur_fd = -1;
+	target_descr_enabled = false;
 
 	remove_all_sw_breakpoints();
 
@@ -1144,9 +1161,14 @@ gdb_read_regs(void)
 		send_error(errno);
 		return;
 	}
+
 	start_packet();
-	for (size_t i = 0; i < nitems(gdb_regset); i++)
+	for (size_t i = 0; i < nitems(gdb_regset); i++) {
+		if (!target_descr_enabled &&
+		    gdb_regset[i].id == GDB_REG_FIRST_EXT)
+			break;
 		append_unsigned_native(regvals[i], gdb_regset[i].size);
+	}
 	finish_packet();
 }
 
@@ -1766,6 +1788,7 @@ gdb_query(const uint8_t *data, size_t len)
 		finish_packet();
 		if (unmap)
 			(void)munmap(__DECONST(void *, xml), xmllen);
+		target_descr_enabled = true;
 	} else
 		send_empty_response();
 }
@@ -2069,6 +2092,7 @@ new_connection(int fd, enum ev_type event __unused, void *arg)
 	/* Break on attach. */
 	first_stop = true;
 	report_next_stop = false;
+	target_descr_enabled = false;
 	gdb_suspend_vcpus();
 	pthread_mutex_unlock(&gdb_lock);
 }
