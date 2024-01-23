@@ -1312,7 +1312,14 @@ hypctx_regptr(struct hypctx *hypctx, int reg)
 	switch (reg) {
 	case VM_REG_GUEST_X0 ... VM_REG_GUEST_X29:
 		return (&hypctx->tf.tf_x[reg]);
+#if __has_feature(capabilities)
+	case VM_REG_GUEST_C0 ... VM_REG_GUEST_C29:
+		return (&hypctx->tf.tf_x[reg - VM_REG_GUEST_C0]);
+#endif
 	case VM_REG_GUEST_LR:
+#if __has_feature(capabilities)
+	case VM_REG_GUEST_C30:
+#endif
 		return (&hypctx->tf.tf_lr);
 	case VM_REG_GUEST_SP:
 		return (&hypctx->tf.tf_sp);
@@ -1356,6 +1363,7 @@ vmmops_getreg(void *vcpui, int reg, uintcap_t *retval)
 	case VM_REG_GUEST_LR:
 	case VM_REG_GUEST_SP:
 	case VM_REG_GUEST_X0 ... VM_REG_GUEST_X29:
+	case VM_REG_GUEST_C0 ... VM_REG_GUEST_C30:
 		*retval = *(uintcap_t *)regp;
 		break;
 	default:
