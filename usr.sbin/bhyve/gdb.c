@@ -323,7 +323,7 @@ guest_paging_info(struct vcpu *vcpu, struct vm_guest_paging *paging)
 		paging->paging_mode = PAGING_MODE_PAE;
 	return (0);
 #else /* __aarch64__ */
-	uint64_t regs[5];
+	uintcap_t regs[5];
 	const int regset[5] = {
 		VM_REG_GUEST_TTBR0_EL1,
 		VM_REG_GUEST_TTBR1_EL1,
@@ -1149,7 +1149,7 @@ gdb_resume_vcpus(void)
 static void
 gdb_read_regs(void)
 {
-	uint64_t regvals[nitems(gdb_regset)];
+	uintcap_t regvals[nitems(gdb_regset)];
 	int regnums[nitems(gdb_regset)];
 
 	for (size_t i = 0; i < nitems(gdb_regset); i++)
@@ -1174,7 +1174,7 @@ gdb_read_regs(void)
 static void
 gdb_read_one_reg(const uint8_t *data, size_t len)
 {
-	uint64_t regval;
+	uintcap_t regval;
 	uintmax_t reg;
 
 	reg = parse_integer(data, len);
