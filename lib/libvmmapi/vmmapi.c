@@ -69,6 +69,8 @@
 #include <machine/vmm_snapshot.h>
 #endif
 
+#include <cheri/cheric.h>
+
 #include "vmmapi.h"
 #include "internal.h"
 
@@ -493,22 +495,33 @@ vm_setup_memory(struct vmctx *ctx, size_t memsize, enum vm_mmap_style vms)
 void *
 vm_map_gpa(struct vmctx *ctx, vm_paddr_t gaddr, size_t len)
 {
+	void *ptr;
 	vm_size_t lowsize, highsize;
+
+	ptr = NULL;
 
 	lowsize = ctx->memsegs[VM_MEMSEG_LOW].size;
 	if (lowsize > 0) {
-		if (gaddr < lowsize && len <= lowsize && gaddr + len <= lowsize)
-			return (ctx->baseaddr + gaddr);
+		if (gaddr < lowsize && len <= lowsize && gaddr + len <= lowsize) {
+			ptr = ctx->baseaddr + gaddr;
+			goto out;
+		}
 	}
 
 	highsize = ctx->memsegs[VM_MEMSEG_HIGH].size;
 	if (highsize > 0 && gaddr >= VM_HIGHMEM_BASE) {
 		if (gaddr < VM_HIGHMEM_BASE + highsize && len <= highsize &&
-		    gaddr + len <= VM_HIGHMEM_BASE + highsize)
-			return (ctx->baseaddr + gaddr);
+		    gaddr + len <= VM_HIGHMEM_BASE + highsize) {
+			ptr = ctx->baseaddr + gaddr;
+			goto out;
+		}
 	}
 
-	return (NULL);
+out:
+	if (ptr != NULL)
+		ptr = cheri_setbounds(ptr, len);
+
+	return (ptr);
 }
 
 vm_paddr_t
