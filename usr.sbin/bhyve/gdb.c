@@ -66,6 +66,8 @@
 #include <unistd.h>
 #include <vmmapi.h>
 
+#include <cheri/cheric.h>
+
 #include "bhyverun.h"
 #include "config.h"
 #include "gdb.h"
@@ -283,6 +285,15 @@ static const gdb_regset[] = {
 	{ .id = VM_REG_GUEST_C28, .size = 16 },
 	{ .id = VM_REG_GUEST_C29, .size = 16 },
 	{ .id = VM_REG_GUEST_C30, .size = 16 },
+	{ .id = VM_REG_GUEST_CSP, .size = 16 },
+	{ .id = VM_REG_GUEST_PCC, .size = 16 },
+	{ .id = VM_REG_GUEST_DDC, .size = 16 },
+	{ .id = VM_REG_GUEST_CTPIDR, .size = 16 },
+	{ .id = VM_REG_GUEST_RCSP, .size = 16 },
+	{ .id = VM_REG_GUEST_RDDC, .size = 16 },
+	{ .id = VM_REG_GUEST_RCTPIDR, .size = 16 },
+	{ .id = VM_REG_GUEST_CID, .size = 16 },
+	{ .id = VM_REG_GUEST_CCTLR, .size = 8 },
 };
 #endif
 
@@ -713,6 +724,18 @@ append_unsigned_native(uintmax_t value, size_t len)
 		append_byte(value);
 		value >>= 8;
 	}
+}
+
+static void
+append_cap_native(uintcap_t value)
+{
+	uint8_t tag;
+
+	tag = cheri_gettag(value);
+
+	append_byte(tag);
+	for (size_t i = 0; i < sizeof(value); i++)
+		append_byte(((uint8_t *)&value)[i]);
 }
 
 static void
@@ -1184,6 +1207,32 @@ gdb_resume_vcpus(void)
 }
 
 static void
+gdb_read_one_reg(const uint8_t *data, size_t len)
+{
+	uintcap_t regval;
+	uintmax_t reg;
+
+	reg = parse_integer(data, len);
+	if (reg >= nitems(gdb_regset)) {
+		send_error(EINVAL);
+		return;
+	}
+
+	if (vm_get_register(vcpus[cur_vcpu], gdb_regset[reg].id, &regval) ==
+	    -1) {
+		send_error(errno);
+		return;
+	}
+
+	start_packet();
+	if (gdb_regset[reg].size <= 8)
+		append_unsigned_native(regval, gdb_regset[reg].size);
+	else
+		append_cap_native(regval);
+	finish_packet();
+}
+
+static void
 gdb_read_regs(void)
 {
 	uintcap_t regvals[nitems(gdb_regset)];
@@ -1204,7 +1253,12 @@ gdb_read_regs(void)
 		    gdb_regset[i].id == GDB_REG_FIRST_EXT)
 			break;
 #endif
-		append_unsigned_native(regvals[i], gdb_regset[i].size);
+		if (gdb_regset[i].id == GDB_REG_FIRST_EXT)
+			break;
+		if (gdb_regset[i].size <= 8)
+			append_unsigned_native(regvals[i], gdb_regset[i].size);
+		else
+			append_cap_native(regvals[i]);
 	}
 	finish_packet();
 }
@@ -1671,6 +1725,7 @@ check_features(const uint8_t *data, size_t len)
 	append_string("PacketSize=4096");
 	append_string(";swbreak+");
 	append_string(";qXfer:features:read+");
+	append_string(";qXfer:capa:read+");
 	finish_packet();
 }
 
@@ -1859,10 +1914,12 @@ handle_command(const uint8_t *data, size_t len)
 
 		/* TODO: Resume any stopped CPUs. */
 		break;
-	case 'g': {
+	case 'g':
 		gdb_read_regs();
 		break;
-	}
+	case 'p':
+		gdb_read_one_reg(data + 1, len - 1);
+		break;
 	case 'H': {
 		int tid;
 
@@ -1934,7 +1991,6 @@ handle_command(const uint8_t *data, size_t len)
 	case 'v':
 		/* Handle 'vCont' */
 		/* 'vCtrlC' */
-	case 'p': /* TODO */
 	case 'P': /* TODO */
 	case 'Q': /* TODO */
 	case 't': /* TODO */
