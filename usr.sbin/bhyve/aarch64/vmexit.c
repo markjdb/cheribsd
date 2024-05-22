@@ -116,6 +116,7 @@ static int
 vmexit_debug(struct vmctx *ctx __unused, struct vcpu *vcpu,
     struct vm_run *vmrun __unused)
 {
+	printf("%s:%d\n", __func__, __LINE__);
 	gdb_cpu_suspend(vcpu);
 	return (VMEXIT_CONTINUE);
 }
