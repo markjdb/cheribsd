@@ -117,7 +117,8 @@ static int
 vmexit_debug(struct vmctx *ctx __unused, struct vcpu *vcpu,
     struct vm_run *vmrun __unused)
 {
-	printf("%s:%d\n", __func__, __LINE__);
+	usleep(100000);
+	printf("%s:%d %d\r\n", __func__, __LINE__, vcpu_id(vcpu));
 	gdb_cpu_suspend(vcpu);
 	return (VMEXIT_CONTINUE);
 }
@@ -127,7 +128,7 @@ vmexit_bogus(struct vmctx *ctx __unused, struct vcpu *vcpu,
     struct vm_run *vmrun __unused)
 {
 	usleep(100000);
-	printf("%s:%d %d\n", __func__, __LINE__, vcpu_id(vcpu));
+	printf("%s:%d %d\r\n", __func__, __LINE__, vcpu_id(vcpu));
 	return (VMEXIT_CONTINUE);
 }
 
