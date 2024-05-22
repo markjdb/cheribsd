@@ -293,6 +293,7 @@ static const gdb_regset[] = {
 };
 #endif
 
+#define	GDB_LOG
 #ifdef GDB_LOG
 #include <stdarg.h>
 #include <stdio.h>
