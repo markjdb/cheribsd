@@ -242,14 +242,13 @@ vmexit_smccc(struct vmctx *ctx, struct vcpu *vcpu, struct vm_run *vmrun)
 }
 
 static int
-vmexit_hyp(struct vmctx *ctx __unused, struct vcpu *vcpu __unused,
-    struct vm_run *vmrun)
+vmexit_hyp(struct vmctx *ctx __unused, struct vcpu *vcpu, struct vm_run *vmrun)
 {
 	struct vm_exit *vme;
 
 	vme = vmrun->vm_exit;
-	printf("unhandled exception: esr %#lx, far %#lx\n",
-	    vme->u.hyp.esr_el2, vme->u.hyp.far_el2);
+	printf("unhandled exception: vcpu %d esr %#lx, far %#lx\n",
+	    vcpu_id(vcpu), vme->u.hyp.esr_el2, vme->u.hyp.far_el2);
 	return (VMEXIT_ABORT);
 }
 
