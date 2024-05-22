@@ -43,6 +43,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <vmmapi.h>
 
@@ -125,7 +126,7 @@ static int
 vmexit_bogus(struct vmctx *ctx __unused, struct vcpu *vcpu,
     struct vm_run *vmrun __unused)
 {
-	usleep(1000);
+	usleep(100000);
 	printf("%s:%d %d\n", __func__, __LINE__, vcpu_id(vcpu));
 	return (VMEXIT_CONTINUE);
 }
