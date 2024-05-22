@@ -839,6 +839,8 @@ handle_el1_sync_excp(struct hypctx *hypctx, struct vm_exit *vme_ret,
 				vme_ret->exitcode = VM_EXITCODE_INST_EMUL;
 			}
 			break;
+		case ISS_DATA_DFSC_CAP_TAG:
+			printf("%s:%d\n", __func__, __LINE__);
 		default:
 			arm64_print_hyp_regs(vme_ret);
 			vme_ret->exitcode = VM_EXITCODE_HYP;
