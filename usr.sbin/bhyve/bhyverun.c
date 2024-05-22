@@ -464,6 +464,9 @@ vm_loop(struct vmctx *ctx, struct vcpu *vcpu)
 	error = vm_active_cpus(ctx, &active_cpus);
 	assert(CPU_ISSET(vcpu_id(vcpu), &active_cpus));
 
+	memset(&dmask, 0, sizeof(dmask));
+	memset(&vmrun, 0, sizeof(vmrun));
+	memset(&vme, 0, sizeof(vme));
 	vmrun.vm_exit = &vme;
 	vmrun.cpuset = &dmask;
 	vmrun.cpusetsize = sizeof(dmask);
