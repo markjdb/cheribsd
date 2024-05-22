@@ -1497,7 +1497,7 @@ vmmops_setcap(void *vcpui, int num, int val)
 	int ret;
 
 	ret = 0;
-
+	printf("%s:%d num=%d val=%d\n", __func__, __LINE__, num, val);
 	switch (num) {
 	case VM_CAP_BRK_EXIT:
 		if ((val != 0) == (hypctx->setcaps & (1ul << num)) != 0)
