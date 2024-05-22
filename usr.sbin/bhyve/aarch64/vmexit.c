@@ -122,9 +122,11 @@ vmexit_debug(struct vmctx *ctx __unused, struct vcpu *vcpu,
 }
 
 static int
-vmexit_bogus(struct vmctx *ctx __unused, struct vcpu *vcpu __unused,
+vmexit_bogus(struct vmctx *ctx __unused, struct vcpu *vcpu,
     struct vm_run *vmrun __unused)
 {
+	usleep(1000);
+	printf("%s:%d %d\n", __func__, __LINE__, vcpu_id(vcpu));
 	return (VMEXIT_CONTINUE);
 }
 
