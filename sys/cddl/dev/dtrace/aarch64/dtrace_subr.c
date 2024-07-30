@@ -264,7 +264,7 @@ dtrace_invop_start(struct trapframe *frame)
 {
 	int data, invop, reg, update_sp;
 	register_t arg1, arg2;
-	register_t *sp;
+	uintptr_t sp;
 	int offs;
 	int tmp;
 	int i;
@@ -273,7 +273,7 @@ dtrace_invop_start(struct trapframe *frame)
 
 	tmp = (invop & LDP_STP_MASK);
 	if (tmp == STP_64 || tmp == LDP_64) {
-		sp = (register_t *)frame->tf_sp;
+		sp = frame->tf_sp;
 		data = invop;
 		arg1 = (data >> ARG1_SHIFT) & ARG1_MASK;
 		arg2 = (data >> ARG2_SHIFT) & ARG2_MASK;
@@ -286,12 +286,12 @@ dtrace_invop_start(struct trapframe *frame)
 				sp -= (~offs & OFFSET_MASK) + 1;
 			else
 				sp += (offs);
-			dtrace_store64(sp + 0, frame, arg1);
-			dtrace_store64(sp + 1, frame, arg2);
+			dtrace_store64((void *)(sp + 0), frame, arg1);
+			dtrace_store64((void *)(sp + 8), frame, arg2);
 			break;
 		case LDP_64:
-			dtrace_load64(sp + 0, frame, arg1);
-			dtrace_load64(sp + 1, frame, arg2);
+			dtrace_load64((void *)(sp + 0), frame, arg1);
+			dtrace_load64((void *)(sp + 8), frame, arg2);
 			if (offs >> (OFFSET_SIZE - 1))
 				sp -= (~offs & OFFSET_MASK) + 1;
 			else
@@ -302,7 +302,7 @@ dtrace_invop_start(struct trapframe *frame)
 		}
 
 		/* Update the stack pointer and program counter to continue */
-		frame->tf_sp = (register_t)sp;
+		frame->tf_sp = sp;
 		frame->tf_elr += INSN_SIZE;
 		return (0);
 	}
