@@ -1876,7 +1876,7 @@ p9fs_doio(struct vnode *vp, struct buf *bp, struct p9_fid *vofid, struct ucred *
 
 	if (bp->b_iocmd == BIO_READ) {
 		io.iov_len = uiov->uio_resid = bp->b_bcount;
-		io.iov_base = bp->b_data;
+		io.iov_base = PTR2CAP(bp->b_data);
 		uiov->uio_rw = UIO_READ;
 
 		switch (vp->v_type) {
@@ -1925,7 +1925,7 @@ p9fs_doio(struct vnode *vp, struct buf *bp, struct p9_fid *vofid, struct ucred *
 		if (bp->b_dirtyend > bp->b_dirtyoff) {
 			io.iov_len = uiov->uio_resid = bp->b_dirtyend - bp->b_dirtyoff;
 			uiov->uio_offset = ((off_t)bp->b_blkno) * PAGE_SIZE + bp->b_dirtyoff;
-			io.iov_base = (char *)bp->b_data + bp->b_dirtyoff;
+			io.iov_base = PTR2CAP(bp->b_data + bp->b_dirtyoff);
 			uiov->uio_rw = UIO_WRITE;
 
 			if (uiov->uio_offset < 0) {
@@ -2170,7 +2170,7 @@ p9fs_putpages(struct vop_putpages_args *ap)
 	VM_CNT_INC(v_vnodeout);
 	VM_CNT_ADD(v_vnodepgsout, count);
 
-	iov.iov_base = (caddr_t) kva;
+	iov.iov_base = PTR2CAP(bp->b_data);
 	iov.iov_len = count;
 	uio.uio_iov = &iov;
 	uio.uio_iovcnt = 1;
