@@ -60,9 +60,9 @@ procstat_vm(struct procstat *procstat, struct kinfo_proc *kipp)
 			    "PID", ptrwidth, "START", ptrwidth, "END", "PRT",
 			    "RES", "PRES", "REF", "SHD", "FLAG", "TP", "PATH");
 		else
-			xo_emit("{T:/%5s %*s %*s %*s %-5s %4s %4s %3s %3s %-6s %-2s %-s}\n",
+			xo_emit("{T:/%5s %*s %*s %*s %-5s %-5s %4s %4s %3s %3s %-6s %-2s %-s}\n",
 			    "PID", ptrwidth, "START", ptrwidth, "END",
-			    ptrwidth, "RESERV", "PRT",
+			    ptrwidth, "RESERV", "PRT", "MAXPRT",
 			    "RES", "PRES", "REF", "SHD", "FLAG", "TP", "PATH");
 	}
 
@@ -109,6 +109,40 @@ procstat_vm(struct procstat *procstat, struct kinfo_proc *kipp)
 		xo_emit("{en:write_cap/%s}", kve->kve_protection &
 		    KVME_PROT_WRITE_CAP ? "true" : "false");
 		xo_close_container("kve_protection");
+		if ((procstat_opts & PS_OPT_VERBOSE) != 0) {
+			xo_emit("{d:max_read/%s}",
+			    kve->kve_max_protection & KVME_PROT_READ ?
+			    "r" : "-");
+			xo_emit("{d:max_write/%s}",
+			    kve->kve_max_protection & KVME_PROT_WRITE ?
+			    "w" : "-");
+			xo_emit("{d:max_exec/%s}",
+			    kve->kve_max_protection & KVME_PROT_EXEC ?
+			    "x" : "-");
+			xo_emit("{d:max_read_cap/%s}",
+			    kve->kve_max_protection & KVME_PROT_READ_CAP ?
+			    "R" : "-");
+			xo_emit("{d:max_write_cap/%-2s} ",
+			    kve->kve_max_protection & KVME_PROT_WRITE_CAP ?
+			    "W" : "-");
+			xo_open_container("kve_max_protection");
+			xo_emit("{en:max_read/%s}",
+			    kve->kve_max_protection & KVME_PROT_READ ?
+			    "true" : "false");
+			xo_emit("{en:max_write/%s}",
+			    kve->kve_max_protection & KVME_PROT_WRITE ?
+			    "true" : "false");
+			xo_emit("{en:max_exec/%s}",
+			    kve->kve_max_protection & KVME_PROT_EXEC ?
+			    "true" : "false");
+			xo_emit("{en:max_read_cap/%s}",
+			    kve->kve_max_protection & KVME_PROT_READ_CAP ?
+			    "true" : "false");
+			xo_emit("{en:max_write_cap/%s}",
+			    kve->kve_max_protection & KVME_PROT_WRITE_CAP ?
+			    "true" : "false");
+			xo_close_container("kve_max_protection");
+		}
 		xo_emit("{:kve_resident/%4d/%d} ", kve->kve_resident);
 		xo_emit("{:kve_private_resident/%4d/%d} ",
 		    kve->kve_private_resident);
