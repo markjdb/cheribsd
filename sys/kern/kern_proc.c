@@ -2905,6 +2905,25 @@ next:;
 	}
 }
 
+static int
+vmprot2kveprot(int prot)
+{
+	int res;
+
+	res = 0;
+	if (prot & VM_PROT_READ)
+		res |= KVME_PROT_READ;
+	if (prot & VM_PROT_WRITE)
+		res |= KVME_PROT_WRITE;
+	if (prot & VM_PROT_EXECUTE)
+		res |= KVME_PROT_EXEC;
+	if (prot & VM_PROT_READ_CAP)
+		res |= KVME_PROT_READ_CAP;
+	if (prot & VM_PROT_WRITE_CAP)
+		res |= KVME_PROT_WRITE_CAP;
+	return (res);
+}
+
 /*
  * Must be called with the process locked and will return unlocked.
  */
@@ -2979,16 +2998,8 @@ kern_proc_vmmap_out(struct proc *p, struct sbuf *sb, ssize_t maxlen, int flags)
 		kve->kve_offset += entry->offset;
 		kve->kve_reservation = entry->reservation;
 
-		if (entry->protection & VM_PROT_READ)
-			kve->kve_protection |= KVME_PROT_READ;
-		if (entry->protection & VM_PROT_WRITE)
-			kve->kve_protection |= KVME_PROT_WRITE;
-		if (entry->protection & VM_PROT_EXECUTE)
-			kve->kve_protection |= KVME_PROT_EXEC;
-		if (entry->protection & VM_PROT_READ_CAP)
-			kve->kve_protection |= KVME_PROT_READ_CAP;
-		if (entry->protection & VM_PROT_WRITE_CAP)
-			kve->kve_protection |= KVME_PROT_WRITE_CAP;
+		kve->kve_protection = vmprot2kveprot(entry->protection);
+		kve->kve_max_protection = vmprot2kveprot(entry->max_protection);
 
 		if (entry->eflags & MAP_ENTRY_COW)
 			kve->kve_flags |= KVME_FLAG_COW;
