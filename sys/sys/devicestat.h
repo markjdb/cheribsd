@@ -31,7 +31,6 @@
 #ifndef _DEVICESTAT_H
 #define _DEVICESTAT_H
 
-#include <sys/types.h>
 #include <sys/queue.h>
 #include <sys/time.h>
 
@@ -146,10 +145,7 @@ struct devstat {
 						      * busy time unaccounted
 						      * for since this time
 						      */
-	union {
-		STAILQ_ENTRY(devstat) 	dev_links;
-		uintcap_t 		_dev_links;
-	};
+	STAILQ_ENTRY(devstat) 	dev_links;
 	u_int32_t		device_number;	     /*
 						      * Devstat device
 						      * number.
@@ -178,13 +174,10 @@ struct devstat {
 						      */
 	devstat_type_flags	device_type;	     /* Device type */
 	devstat_priority	priority;	     /* Controls list pos. */
-	union {
-		const void	*id;		     /*
+	const void		*id;		     /*
 						      * Identification for
 						      * GEOM nodes
 						      */
-		const uintcap_t	_id;
-	};
 	u_int			sequence1;	     /* Update sequence# */
 };
 
