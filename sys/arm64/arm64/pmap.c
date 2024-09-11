@@ -5149,6 +5149,17 @@ set_l3:
 			return (false);
 		}
 		all_l3e_AF &= oldl3;
+#if __has_feature(capabilities)
+		/*
+		 * Prohibit superpages involving CDBM-set SC-clear PTEs.
+		 */
+		if ((oldl3 & (ATTR_CDBM | ATTR_SC)) == ATTR_CDBM) {
+			atomic_add_long(&pmap_l2_p_failures, 1);
+			CTR2(KTR_PMAP, "pmap_promote_l2: CDBM failure for va "
+			    "%#lx in pmap %p", va, pmap);
+			return (false);
+		}
+#endif
 		pa -= PAGE_SIZE;
 	}
 
