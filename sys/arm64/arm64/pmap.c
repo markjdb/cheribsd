@@ -5081,6 +5081,18 @@ pmap_promote_l3c(pmap_t pmap, pd_entry_t *l3p, vm_offset_t va)
 	 * to a read-only mapping.  See pmap_promote_l2() for the rationale.
 	 */
 set_first:
+#if __has_feature(capabilities)
+	/*
+	 * Prohibit superpages involving CDBM-set SC-clear PTEs.  See
+	 * pmap_promote_l2() for the rationale.
+	 */
+	if ((firstl3c & (ATTR_CDBM | ATTR_SC)) == ATTR_CDBM) {
+		CTR2(KTR_PMAP, "pmap_promote_l3c: CDBM failure for va "
+		    "%#lx in pmap %p", va, pmap);
+		return (false);
+	}
+#endif
+
 	if ((firstl3c & (ATTR_S1_AP_RW_BIT | ATTR_SW_DBM)) ==
 	    (ATTR_S1_AP(ATTR_S1_AP_RO) | ATTR_SW_DBM)) {
 		/*
@@ -5132,6 +5144,17 @@ set_l3:
 			return (false);
 		}
 		all_l3e_AF &= oldl3;
+#if __has_feature(capabilities)
+		/*
+		 * Prohibit superpages involving CDBM-set SC-clear PTEs.
+		 */
+		if ((oldl3 & (ATTR_CDBM | ATTR_SC)) == ATTR_CDBM) {
+			atomic_add_long(&pmap_l2_p_failures, 1);
+			CTR2(KTR_PMAP, "pmap_promote_l2: CDBM failure for va "
+			    "%#lx in pmap %p", va, pmap);
+			return (false);
+		}
+#endif
 		pa -= PAGE_SIZE;
 	}
 
