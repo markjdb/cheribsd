@@ -556,6 +556,10 @@ vt_proc_window_switch(struct vt_window *vw)
 	return (ret);
 }
 
+static int vt_window_switch_on_panic = 1;
+SYSCTL_INT(_kern_vt, OID_AUTO, switch_on_panic, CTLFLAG_RWTUN,
+    &vt_window_switch_on_panic, 0, "Switch to VT0 on panic");
+
 /* Switch window ignoring process locking. */
 static int
 vt_window_switch(struct vt_window *vw)
@@ -564,7 +568,8 @@ vt_window_switch(struct vt_window *vw)
 	struct vt_window *curvw = vd->vd_curwindow;
 	keyboard_t *kbd;
 
-	if (inside_vt_window_switch && KERNEL_PANICKED())
+	if ((inside_vt_window_switch || !vt_window_switch_on_panic) &&
+	    KERNEL_PANICKED())
 		return (0);
 
 	inside_vt_window_switch = true;
