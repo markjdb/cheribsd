@@ -115,6 +115,7 @@ komeda_drm_gem_object_mmap(struct drm_gem_object *obj,
 	if (error)
 		printf("%s: error %d\n", __func__, error);
 
+	printf("%s:%d\n", __func__, __LINE__);
 	vma->vm_pfn = OFF_TO_IDX(bo->pbase);
 
 	return (error);

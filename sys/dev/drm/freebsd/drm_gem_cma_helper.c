@@ -66,19 +66,16 @@ drm_gem_cma_destruct(struct drm_gem_cma_object *bo)
 		m = bo->m[i];
 		if (m == NULL)
 			break;
-		vm_page_lock(m);
-		m->oflags |= VPO_UNMANAGED;
-		m->flags &= ~PG_FICTITIOUS;
-		vm_page_unwire_noq(m);
+		(void)vm_page_unwire_noq(m);
 		vm_page_free(m);
-		vm_page_unlock(m);
 	}
 }
 
 static int
-drm_gem_cma_alloc_contig(size_t npages, u_long alignment, vm_memattr_t memattr,
+drm_gem_cma_alloc_pages(size_t npages, vm_memattr_t memattr,
     vm_page_t **ret_page)
 {
+#if 1
 	vm_page_t m;
 	int pflags, tries, i;
 	vm_paddr_t low, high, boundary;
@@ -90,16 +87,17 @@ drm_gem_cma_alloc_contig(size_t npages, u_long alignment, vm_memattr_t memattr,
 	    VM_ALLOC_ZERO;
 	tries = 0;
 retry:
-	m = vm_page_alloc_noobj_contig(pflags, npages, low, high, alignment,
+	m = vm_page_alloc_noobj_contig(pflags, npages, low, high, PAGE_SIZE,
 	    boundary, memattr);
 	if (m == NULL) {
 		if (tries < 3) {
 			if (!vm_page_reclaim_contig(pflags, npages, low, high,
-			    alignment, boundary))
+			    PAGE_SIZE, boundary))
 				vm_wait(NULL);
 			tries++;
 			goto retry;
 		}
+		printf("%s:%d failed to allocate %zu pages\n", __func__, __LINE__, npages);
 		return (ENOMEM);
 	}
 
@@ -109,6 +107,18 @@ retry:
 	}
 
 	return (0);
+#else
+	for (size_t i = 0; i < npages; i++) {
+		vm_page_t m;
+
+		m = vm_page_alloc_noobj_contig(VM_ALLOC_NORMAL |
+		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED | VM_ALLOC_ZERO |
+		    VM_ALLOC_WAITOK, 1, 0, ~0ul, PAGE_SIZE, 0, memattr);
+		m->valid = VM_PAGE_BITS_ALL;
+		(*ret_page)[i] = m;
+	}
+	return (0);
+#endif
 }
 
 /* Allocate memory for frame buffer */
@@ -116,37 +126,19 @@ static int
 drm_gem_cma_alloc(struct drm_device *drm, struct drm_gem_cma_object *bo)
 {
 	size_t size;
-	vm_page_t m;
-	int i;	int rv;
+	int rv;
 
 	size = round_page(bo->gem_obj.size);
 	bo->npages = atop(size);
 	bo->size = round_page(size);
-	bo->m = malloc(sizeof(vm_page_t *) * bo->npages, DRM_MEM_DRIVER,
+	bo->m = mallocarray(bo->npages, sizeof(vm_page_t *), DRM_MEM_DRIVER,
 	    M_WAITOK | M_ZERO);
 
-	rv = drm_gem_cma_alloc_contig(bo->npages, PAGE_SIZE,
-	    VM_MEMATTR_WRITE_COMBINING, &(bo->m));
+	rv = drm_gem_cma_alloc_pages(bo->npages, VM_MEMATTR_WRITE_COMBINING,
+	    &(bo->m));
 	if (rv != 0) {
 		DRM_WARN("Cannot allocate memory for gem object.\n");
 		return (rv);
-	}
-
-	for (i = 0; i < bo->npages; i++) {
-		m = bo->m[i];
-		/*
-		 * XXX This is a temporary hack.
-		 * We need pager suitable for paging (mmap) managed
-		 * real (non-fictitious) pages.
-		 * - managed pages are needed for clean module unload.
-		 * - aliasing fictitious page to real one is bad,
-		 *   pmap cannot handle this situation without issues
-		 *   It expects that
-		 *    paddr = PHYS_TO_VM_PAGE(VM_PAGE_TO_PHYS(paddr))
-		 *   for every single page passed to pmap.
-		 */
-		m->oflags &= ~VPO_UNMANAGED;
-		m->flags |= PG_FICTITIOUS;
 	}
 
 	bo->pbase = VM_PAGE_TO_PHYS(bo->m[0]);
@@ -204,7 +196,7 @@ const struct vm_operations_struct drm_gem_cma_vm_ops = {
 	.fault = drm_gem_cma_fault,
 	.open = drm_gem_vm_open,
 	.close = drm_gem_vm_close,
-	.objtype = OBJT_MGTDEVICE,
+	.objtype = OBJT_PHYS,
 };
 
 static int
@@ -299,6 +291,7 @@ drm_gem_cma_mmap(struct file *file, struct vm_area_struct *vma)
 	if (bo->pbase == 0)
 		return (0);
 
+	printf("%s:%d\n", __func__, __LINE__);
 	vma->vm_pfn = OFF_TO_IDX(bo->pbase);
 	return (rv);
 }

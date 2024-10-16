@@ -36,6 +36,7 @@
 #include <sys/module.h>
 #include <sys/rman.h>
 #include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <machine/bus.h>
 #include <vm/vm.h>
 #include <vm/vm_object.h>
@@ -571,6 +572,10 @@ panfrost_gem_mapping_get(struct panfrost_gem_object *bo,
 	return (result);
 }
 
+static int panfrost_alloc_mode = 3;
+SYSCTL_INT(_debug, OID_AUTO, panfrost_alloc_mode, CTLFLAG_RWTUN,
+    &panfrost_alloc_mode, 0, "Allocation mode");
+
 static int
 panfrost_alloc_pages_iommu(struct panfrost_gem_object *bo)
 {
@@ -662,6 +667,24 @@ retry:
 	return (0);
 }
 
+static int
+panfrost_alloc_pages(struct panfrost_gem_object *bo)
+{
+	for (int i = 0; i < bo->npages; i++) {
+		bo->pages[i] = vm_page_alloc_noobj_contig(VM_ALLOC_NORMAL |
+		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED | VM_ALLOC_ZERO, 1,
+		    0, ~0ul, PAGE_SIZE, 0, VM_MEMATTR_WRITE_COMBINING);
+		if (bo->pages[i] == NULL) {
+			for (int j = 0; j < i; j++) {
+				vm_page_free(bo->pages[j]);
+				bo->pages[j] = NULL;
+			}
+			return (ENOMEM);
+		}
+	}
+	return (0);
+}
+
 int
 panfrost_gem_get_pages(struct panfrost_gem_object *bo)
 {
@@ -677,10 +700,12 @@ panfrost_gem_get_pages(struct panfrost_gem_object *bo)
 	bo->pages = mallocarray(bo->npages, sizeof(vm_page_t *), M_PANFROST,
 	    M_WAITOK | M_ZERO);
 
-	if (1 == 0)
+	if (panfrost_alloc_mode == 1)
 		error = panfrost_alloc_pages_iommu(bo);
-	else
+	else if (panfrost_alloc_mode == 2)
 		error = panfrost_alloc_pages_contig(bo);
+	else
+		error = panfrost_alloc_pages(bo);
 	if (error) {
 		printf("%s:%d failed to allocate %d pages\n",
 		    __func__, __LINE__, bo->npages);
