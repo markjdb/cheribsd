@@ -112,7 +112,7 @@ retry:
 
 		m = vm_page_alloc_noobj_contig(VM_ALLOC_NORMAL |
 		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED | VM_ALLOC_ZERO |
-		    VM_ALLOC_WAITOK, 1, 0, -1UL, 0, 0, memattr);
+		    VM_ALLOC_WAITOK, 1, 0, ~0ul, PAGE_SIZE, 0, memattr);
 		m->valid = VM_PAGE_BITS_ALL;
 		(*ret_page)[i] = m;
 	}

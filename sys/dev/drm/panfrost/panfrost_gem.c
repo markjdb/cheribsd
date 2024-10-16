@@ -673,7 +673,7 @@ panfrost_alloc_pages(struct panfrost_gem_object *bo)
 	for (int i = 0; i < bo->npages; i++) {
 		bo->pages[i] = vm_page_alloc_noobj_contig(VM_ALLOC_NORMAL |
 		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED | VM_ALLOC_ZERO, 1,
-		    0, ~0, PAGE_SIZE, 0, VM_MEMATTR_WRITE_COMBINING);
+		    0, ~0ul, PAGE_SIZE, 0, VM_MEMATTR_WRITE_COMBINING);
 		if (bo->pages[i] == NULL) {
 			for (int j = 0; j < i; j++) {
 				vm_page_free(bo->pages[j]);
