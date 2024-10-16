@@ -670,22 +670,16 @@ int
 panfrost_gem_get_pages(struct panfrost_gem_object *bo)
 {
 	struct drm_gem_object *obj;
-	vm_page_t *m0;
-	int npages;
 	int error;
 
 	if (bo->sgt != NULL || bo->pages != NULL)
 		return (0);
 
 	obj = &bo->base;
-	npages = obj->size / PAGE_SIZE;
-
-	KASSERT(npages != 0, ("npages is 0"));
-
-	m0 = malloc(sizeof(vm_page_t *) * npages, M_PANFROST,
+	bo->npages = obj->size / PAGE_SIZE;
+	KASSERT(bo->npages != 0, ("npages is 0"));
+	bo->pages = mallocarray(bo->npages, sizeof(vm_page_t *), M_PANFROST,
 	    M_WAITOK | M_ZERO);
-	bo->pages = m0;
-	bo->npages = npages;
 
 	if (1 == 0)
 		error = panfrost_alloc_pages_iommu(bo);
@@ -693,11 +687,11 @@ panfrost_gem_get_pages(struct panfrost_gem_object *bo)
 		error = panfrost_alloc_pages_contig(bo);
 	if (error) {
 		printf("%s:%d failed to allocate %d pages\n",
-		    __func__, __LINE__, npages);
+		    __func__, __LINE__, bo->npages);
 		return (error);
 	}
 
-	bo->sgt = drm_prime_pages_to_sg(m0, npages);
+	bo->sgt = drm_prime_pages_to_sg(bo->pages, bo->npages);
 
 	return (0);
 }
