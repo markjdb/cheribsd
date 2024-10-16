@@ -72,9 +72,10 @@ drm_gem_cma_destruct(struct drm_gem_cma_object *bo)
 }
 
 static int
-drm_gem_cma_alloc_contig(size_t npages, u_long alignment, vm_memattr_t memattr,
+drm_gem_cma_alloc_pages(size_t npages, vm_memattr_t memattr,
     vm_page_t **ret_page)
 {
+#if 0
 	vm_page_t m;
 	int pflags, tries, i;
 	vm_paddr_t low, high, boundary;
@@ -105,6 +106,17 @@ retry:
 	}
 
 	return (0);
+#endif
+	for (size_t i = 0; i < npages; i++) {
+		vm_page_t m;
+
+		m = vm_page_alloc_noobj_contig(VM_ALLOC_NORMAL |
+		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED | VM_ALLOC_ZERO |
+		    VM_ALLOC_WAITOK, 1, 0, -1UL, 0, 0, memattr);
+		m->valid = VM_PAGE_BITS_ALL;
+		(*ret_page)[i] = m;
+	}
+	return (0);
 }
 
 /* Allocate memory for frame buffer */
@@ -120,8 +132,8 @@ drm_gem_cma_alloc(struct drm_device *drm, struct drm_gem_cma_object *bo)
 	bo->m = mallocarray(bo->npages, sizeof(vm_page_t *), DRM_MEM_DRIVER,
 	    M_WAITOK | M_ZERO);
 
-	rv = drm_gem_cma_alloc_contig(bo->npages, PAGE_SIZE,
-	    VM_MEMATTR_WRITE_COMBINING, &(bo->m));
+	rv = drm_gem_cma_alloc_pages(bo->npages, VM_MEMATTR_WRITE_COMBINING,
+	    &(bo->m));
 	if (rv != 0) {
 		DRM_WARN("Cannot allocate memory for gem object.\n");
 		return (rv);
