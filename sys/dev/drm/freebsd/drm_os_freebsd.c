@@ -512,6 +512,7 @@ drm_fstub_do_mmap(struct file *file, const struct file_operations *fops,
 		vmap->vm_obj = dog->object;
 		sx_xunlock(&drm_vma_lock);
 	} else {
+		printf("%s:%d\n", __func__, __LINE__);
 		struct sglist *sg;
 
 		sg = sglist_alloc(1, M_WAITOK);
