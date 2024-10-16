@@ -97,6 +97,7 @@ retry:
 			tries++;
 			goto retry;
 		}
+		printf("%s:%d failed to allocate %zu pages\n", __func__, __LINE__, npages);
 		return (ENOMEM);
 	}
 
@@ -290,6 +291,7 @@ drm_gem_cma_mmap(struct file *file, struct vm_area_struct *vma)
 	if (bo->pbase == 0)
 		return (0);
 
+	printf("%s:%d\n", __func__, __LINE__);
 	vma->vm_pfn = OFF_TO_IDX(bo->pbase);
 	return (rv);
 }
