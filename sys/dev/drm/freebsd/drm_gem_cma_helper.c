@@ -75,7 +75,7 @@ static int
 drm_gem_cma_alloc_pages(size_t npages, vm_memattr_t memattr,
     vm_page_t **ret_page)
 {
-#if 0
+#if 1
 	vm_page_t m;
 	int pflags, tries, i;
 	vm_paddr_t low, high, boundary;
@@ -87,12 +87,12 @@ drm_gem_cma_alloc_pages(size_t npages, vm_memattr_t memattr,
 	    VM_ALLOC_ZERO;
 	tries = 0;
 retry:
-	m = vm_page_alloc_noobj_contig(pflags, npages, low, high, alignment,
+	m = vm_page_alloc_noobj_contig(pflags, npages, low, high, PAGE_SIZE,
 	    boundary, memattr);
 	if (m == NULL) {
 		if (tries < 3) {
 			if (!vm_page_reclaim_contig(pflags, npages, low, high,
-			    alignment, boundary))
+			    PAGE_SIZE, boundary))
 				vm_wait(NULL);
 			tries++;
 			goto retry;
@@ -106,7 +106,7 @@ retry:
 	}
 
 	return (0);
-#endif
+#else
 	for (size_t i = 0; i < npages; i++) {
 		vm_page_t m;
 
@@ -117,6 +117,7 @@ retry:
 		(*ret_page)[i] = m;
 	}
 	return (0);
+#endif
 }
 
 /* Allocate memory for frame buffer */
