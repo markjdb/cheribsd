@@ -1152,7 +1152,7 @@ cuse_server_ioctl(struct cdev *dev, unsigned long cmd,
 #ifdef COMPAT_FREEBSD64
 		if (!SV_CURPROC_FLAG(SV_CHERI)) {
 			pcmd64 = (struct cuse_command64 *)data;
-			pcmd64->dev = (uint64_t)pccmd->sub.dev;
+			pcmd64->dev = (__cheri_addr uint64_t)pccmd->sub.dev;
 			CP(pccmd->sub, *pcmd64, fflags);
 			CP(pccmd->sub, *pcmd64, per_file_handle);
 			CP(pccmd->sub, *pcmd64, data_pointer);
