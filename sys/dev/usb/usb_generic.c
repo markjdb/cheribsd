@@ -1640,11 +1640,13 @@ ugen_fs_copy_out(struct usb_fifo *f, uint8_t ep_index)
 	mtx_lock(f->priv_mtx);
 	if (ep_index >= f->fs_ep_max) {
 		mtx_unlock(f->priv_mtx);
+		printf("%s:%d %d %d\n", __func__, __LINE__, ep_index, f->fs_ep_max);
 		return (EINVAL);
 	}
 	xfer = f->fs_xfer[ep_index];
 	if (xfer == NULL) {
 		mtx_unlock(f->priv_mtx);
+		printf("%s:%d %d\n", __func__, __LINE__, ep_index);
 		return (EINVAL);
 	}
 	if (!xfer->flags_int.transferring &&
