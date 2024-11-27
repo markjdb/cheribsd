@@ -1188,6 +1188,10 @@ vmmops_run(void *vcpui, uintcap_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 			/* Set the new cpsr */
 			hypctx->tf.tf_spsr = hypctx->spsr_el1 & PSR_FLAGS;
 			hypctx->tf.tf_spsr |= PSR_DAIF | PSR_M_EL1h;
+#if __has_feature(capabilities)
+			if ((hypctx->cctlr_el1 & CCTLR_EL1_C64E_MASK) != 0)
+				hypctx->tf.tf_spsr |= PSR_C64;
+#endif
 
 			/*
 			 * Update fields that may change on exeption entry
