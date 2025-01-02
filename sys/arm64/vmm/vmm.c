@@ -1570,8 +1570,9 @@ _vm_gpa_hold(struct vm *vm, vm_paddr_t gpa, size_t len, int reqprot,
 			void * __capability gpap;
 
 #if __has_feature(capabilities)
-			gpap = cheri_setaddress(vmm_gpa_root_cap,
-			    trunc_page(gpa));
+			gpap = cheri_setbounds(
+			    cheri_setaddress(vmm_gpa_root_cap, trunc_page(gpa)),
+			    PAGE_SIZE);
 #else
 			gpap = (void *)trunc_page(gpa);
 #endif
