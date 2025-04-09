@@ -757,24 +757,22 @@ visit_rw:
 		 * and in that case; something funny is going on, so just bail
 		 * out to the fault path.
 		 */
-		goto visit_rw_fault;
-	}
-
+	} else {
 visit_ro:
-	KASSERT(mxbusy || mwired, ("RO visit !busy !wired?"));
+		KASSERT(mxbusy || mwired, ("RO visit !busy !wired?"));
 
-	switch (vm_cheri_revoke_visit_ro(crc, m, &viscap)) {
-	case VM_CHERI_REVOKE_VIS_DONE:
-		/* We were able to conclude that the page was clean while RO*/
-		goto ok;
-	case VM_CHERI_REVOKE_VIS_DIRTY:
-		/* Dirty here means we need to upgrade to RW now */
-		break;
-	default:
-		panic("bad result from vm_cheri_revoke_visit_ro");
+		switch (vm_cheri_revoke_visit_ro(crc, m, &viscap)) {
+		case VM_CHERI_REVOKE_VIS_DONE:
+			/* We were able to conclude that the page was clean while RO*/
+			goto ok;
+		case VM_CHERI_REVOKE_VIS_DIRTY:
+			/* Dirty here means we need to upgrade to RW now */
+			break;
+		default:
+			panic("bad result from vm_cheri_revoke_visit_ro");
+		}
 	}
 
-visit_rw_fault:
 	CHERI_REVOKE_STATS_BUMP(crst, pages_faulted_rw);
 
 	if (mwired) {
