@@ -2075,24 +2075,21 @@ found:
 	 */
 	VM_OBJECT_ASSERT_CAP(fs.object, fs.prot);
 
-	if ((fs.fault_flags & VM_FAULT_NOPMAP) == 0) {
-		vm_prot_t realprot;
-
-		/*
-		 * Modulate VM_PROT_WRITE_CAP by fs.object's OBJ_HASCAP and
-		 * fs.m's PGA_CAPSTORE.
-		 */
-		realprot = VM_OBJECT_MASK_CAP_PROT(fs.object, fs.prot);
-		realprot = vm_page_mask_cap_prot(fs.m, realprot);
-		pmap_enter(fs.map->pmap, vaddr, fs.m, realprot,
-		    fs.fault_type | (fs.wired ? PMAP_ENTER_WIRED : 0), 0);
-		if (faultcount != 1 &&
-		    (fs.fault_flags & VM_FAULT_WIRE) == 0 &&
-		    fs.wired == 0)
-			vm_fault_prefault(&fs, vaddr,
-			    faultcount > 0 ? behind : PFBAK,
-			    faultcount > 0 ? ahead : PFFOR, false);
-	}
+	/*
+	 * Modulate VM_PROT_WRITE_CAP by fs.object's OBJ_HASCAP and fs.m's
+	 * PGA_CAPSTORE.
+	 */
+	vm_prot_t realprot = VM_OBJECT_MASK_CAP_PROT(fs.object, fs.prot);
+	realprot = vm_page_mask_cap_prot(fs.m, realprot);
+	pmap_enter(fs.map->pmap, vaddr, fs.m, realprot,
+	    fs.fault_type | (fs.wired ? PMAP_ENTER_WIRED : 0) |
+	    (fs.fault_flags & PMAP_ENTER_UPGRADE_ONLY), 0);
+	if (faultcount != 1 &&
+	    (fs.fault_flags & (VM_FAULT_WIRE | VM_FAULT_NOPMAP)) == 0 &&
+	    fs.wired == 0)
+		vm_fault_prefault(&fs, vaddr,
+		    faultcount > 0 ? behind : PFBAK,
+		    faultcount > 0 ? ahead : PFFOR, false);
 
 	/*
 	 * If the page is not wired down, then put it where the pageout daemon

@@ -789,7 +789,7 @@ visit_ro:
 	m = NULL;
 
 	res = vm_fault(map, addr, VM_PROT_WRITE | VM_PROT_WRITE_CAP,
-	    VM_FAULT_NORMAL | VM_FAULT_NOPMAP, &m);
+	    VM_FAULT_NOPMAP, &m);
 	vm_map_lock_read(map);
 	if (res != KERN_SUCCESS) {
 		*vmres = res;
@@ -803,7 +803,7 @@ visit_ro:
 	}
 
 	mwired = true;
-
+	mdidvm = true;
 ok:
 	VM_OBJECT_ASSERT_UNLOCKED(obj);
 	KASSERT(mxbusy || mwired, ("caprevoke !xbusy !wired?"));

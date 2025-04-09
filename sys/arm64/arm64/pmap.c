@@ -5381,6 +5381,8 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	lock = NULL;
 	PMAP_LOCK(pmap);
 	if ((flags & PMAP_ENTER_LARGEPAGE) != 0) {
+		KASSERT((flags & PMAP_ENTER_UPGRADE_ONLY) == 0,
+		    ("pmap_enter: unexpected PMAP_ENTER_UPGRADE_ONLY"));
 		KASSERT((m->oflags & VPO_UNMANAGED) != 0,
 		    ("managed largepage va %#lx flags %#x", va, flags));
 		if (psind == 3) {
@@ -5396,6 +5398,8 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 		goto out;
 	}
 	if (psind == 2) {
+		KASSERT((flags & PMAP_ENTER_UPGRADE_ONLY) == 0,
+		    ("pmap_enter: unexpected PMAP_ENTER_UPGRADE_ONLY"));
 		/* Assert the required virtual and physical alignment. */
 		KASSERT((va & L2_OFFSET) == 0, ("pmap_enter: va unaligned"));
 		KASSERT(m->psind > 1, ("pmap_enter: m->psind < psind"));
@@ -5405,6 +5409,8 @@ pmap_enter(pmap_t pmap, vm_offset_t va, vm_page_t m, vm_prot_t prot,
 	}
 	mpte = NULL;
 	if (psind == 1) {
+		KASSERT((flags & PMAP_ENTER_UPGRADE_ONLY) == 0,
+		    ("pmap_enter: unexpected PMAP_ENTER_UPGRADE_ONLY"));
 		KASSERT((va & L3C_OFFSET) == 0, ("pmap_enter: va unaligned"));
 		KASSERT(m->psind > 0, ("pmap_enter: m->psind < psind"));
 		rv = pmap_enter_l3c(pmap, va, new_l3 | ATTR_CONTIGUOUS, flags,
@@ -5452,6 +5458,10 @@ retry:
 		/* We need to allocate an L3 table. */
 	}
 	if (!ADDR_IS_KERNEL(va)) {
+		if ((flags & PMAP_ENTER_UPGRADE_ONLY) != 0) {
+			rv = KERN_SUCCESS;
+			goto out;
+		}
 		nosleep = (flags & PMAP_ENTER_NOSLEEP) != 0;
 
 		/*
@@ -5553,6 +5563,9 @@ havel3:
 			pmap_invalidate_page(pmap, va, true);
 		}
 		orig_l3 = 0;
+	} else if ((flags & PMAP_ENTER_UPGRADE_ONLY) != 0) {
+		rv = KERN_SUCCESS;
+		goto out;
 	} else {
 		/*
 		 * Increment the counters.
