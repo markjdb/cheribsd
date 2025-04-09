@@ -359,8 +359,8 @@ vm_fault_must_cheri_revoke(vm_map_t map, vm_prot_t prot, vm_page_t m,
 	if ((vm_page_astate_load(m).flags & PGA_CAPSTORE) == 0)
 		return (false);
 
-	/* Or we aren't exposing the page via the pmap */
-	if ((fault_flags & VM_FAULT_NOPMAP) != 0)
+	/* Or the caller specifically asked us not to revoke */
+	if ((fault_flags & VM_FAULT_NOREVOKE) != 0)
 		return (false);
 
 	return (true);

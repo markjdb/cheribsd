@@ -391,7 +391,7 @@ proc_rwmem(struct proc *p, struct uio *uio)
 	writing = uio->uio_rw == UIO_WRITE;
 	reqprot = writing ? VM_PROT_COPY | VM_PROT_READ : VM_PROT_READ;
 	fault_flags = writing ? VM_FAULT_DIRTY : VM_FAULT_NORMAL;
-	fault_flags |= VM_FAULT_NOPMAP;
+	fault_flags |= VM_FAULT_NOPMAP | VM_FAULT_NOREVOKE;
 
 	/*
 	 * Only map in one page at a time.  We don't have to, but it
@@ -516,7 +516,7 @@ proc_read_cheri_tags_page(vm_map_t map, vm_offset_t va, void *tagbuf,
 	 * the page doesn't exist, fill the tag buffer with zeroes.
 	 */
 	error = vm_fault(map, va, VM_PROT_READ,
-	    VM_FAULT_NOFILL | VM_FAULT_NOPMAP, &m);
+	    VM_FAULT_NOFILL | VM_FAULT_NOPMAP | VM_FAULT_NOREVOKE, &m);
 	if (error == KERN_PAGE_NOT_FILLED) {
 		memset(tagbuf, 0, TAG_BYTES_PER_PAGE);
 		*hastagsp = false;
@@ -606,7 +606,7 @@ proc_read_cheri_cap_page(vm_map_t map, vm_offset_t va, struct uio *uio)
 	va = trunc_page(va);
 
 	error = vm_fault(map, va, VM_PROT_READ,
-	    VM_FAULT_NOFILL | VM_FAULT_NOPMAP, &m);
+	    VM_FAULT_NOFILL | VM_FAULT_NOPMAP | VM_FAULT_NOREVOKE, &m);
 	if (error == KERN_PAGE_NOT_FILLED) {
 		memset(capbuf, 0, sizeof(capbuf));
 		while (todo > 0) {
@@ -684,7 +684,7 @@ proc_write_cheri_cap_page(struct proc *p, vm_map_t map, vm_offset_t va,
 	va = trunc_page(va);
 
 	error = vm_fault(map, va, VM_PROT_WRITE | VM_PROT_WRITE_CAP,
-	    VM_FAULT_NOPMAP, &m);
+	    VM_FAULT_NOPMAP | VM_FAULT_NOREVOKE, &m);
 	if (error != KERN_SUCCESS)
 		return (EFAULT);
 

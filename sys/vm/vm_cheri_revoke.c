@@ -698,7 +698,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 		last_timestamp = map->timestamp;
 		vm_map_unlock_read(map);
 		res = vm_fault(map, addr, VM_PROT_READ | VM_PROT_READ_CAP,
-		    VM_FAULT_NOFILL | VM_FAULT_NOPMAP, &m);
+		    VM_FAULT_NOFILL | VM_FAULT_NOPMAP | VM_FAULT_NOREVOKE, &m);
 		vm_map_lock_read(map);
 
 		if (last_timestamp != map->timestamp) {
@@ -738,7 +738,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 	 * The page isn't mapped but we may need to modify it.  Use the map
 	 * entry's state to decide whether we can bypass the page fault handler.
 	 */
-	if ((entry->eflags & MAP_ENTRY_NEEDS_COPY) == 0 &&
+	if (mxbusy && (entry->eflags & MAP_ENTRY_NEEDS_COPY) == 0 &&
 	    (entry->protection & VM_PROT_WRITE) != 0) {
 visit_rw:
 		KASSERT(vm_page_all_valid(m), ("Page grab valid invalid?"));
