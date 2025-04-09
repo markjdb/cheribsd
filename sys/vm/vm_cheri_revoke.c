@@ -698,7 +698,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 		last_timestamp = map->timestamp;
 		vm_map_unlock_read(map);
 		res = vm_fault(map, addr, VM_PROT_READ | VM_PROT_READ_CAP,
-		    VM_FAULT_NOFILL, &m);
+		    VM_FAULT_NOFILL | VM_FAULT_NOPMAP, &m);
 		vm_map_lock_read(map);
 
 		if (last_timestamp != map->timestamp) {
@@ -722,19 +722,12 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 			*vmres = res;
 			return (VM_CHERI_REVOKE_AT_VMERR);
 		}
-
-		/*
-		 * vm_fault will have scanned this page for us, so we're good
-		 * to jump out.  The pmap will have been updated by vm_fault.
-		 */
-		mdidvm = true;
 		mwired = true;
-		goto ok;
+	} else {
+		KASSERT(m->object == obj, ("Page lookup bad object?"));
+		mxbusy = true;
+		VM_OBJECT_WUNLOCK(obj);
 	}
-
-	KASSERT(m->object == obj, ("Page lookup bad object?"));
-	mxbusy = true;
-	VM_OBJECT_WUNLOCK(obj);
 
 	if (!vm_cheri_revoke_should_visit_page(m)) {
 		CHERI_REVOKE_STATS_BUMP(crst, pages_skip);
@@ -796,7 +789,7 @@ visit_ro:
 	m = NULL;
 
 	res = vm_fault(map, addr, VM_PROT_WRITE | VM_PROT_WRITE_CAP,
-	    VM_FAULT_NORMAL, &m);
+	    VM_FAULT_NORMAL | VM_FAULT_NOPMAP, &m);
 	vm_map_lock_read(map);
 	if (res != KERN_SUCCESS) {
 		*vmres = res;
@@ -810,7 +803,6 @@ visit_ro:
 	}
 
 	mwired = true;
-	mdidvm = true;
 
 ok:
 	VM_OBJECT_ASSERT_UNLOCKED(obj);
