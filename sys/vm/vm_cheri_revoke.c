@@ -99,6 +99,11 @@ SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, last_ref_early_finish, CTLF
     &cheri_last_ref_early_finish,
     "Scans finished early because the target exited");
 
+static COUNTER_U64_DEFINE_EARLY(cheri_object_mismatches);
+SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, object_mismatches, CTLFLAG_RD,
+    &cheri_object_mismatches,
+    "Number of pages encountered with mismatched object");
+
 /***************************** KERNEL THREADS ***************************/
 
 static MALLOC_DEFINE(M_REVOKE, "cheri_revoke", "cheri_revoke temporary data");
@@ -751,6 +756,7 @@ visit_rw:
 			vm_cheri_revoke_visit_rw(crc, m, &viscap);
 			goto ok;
 		}
+		counter_u64_add(cheri_object_mismatches, 1);
 
 		/*
 		 * The page may have changed identity while we were xbusying it
