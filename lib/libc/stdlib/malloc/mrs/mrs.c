@@ -137,6 +137,8 @@ extern void snmalloc_flush_message_queue(void);
 	"_RUNTIME_BOUND_CHERI_POINTERS"
 #define	MALLOC_NOBOUND_CHERI_POINTERS \
 	"_RUNTIME_NOBOUND_CHERI_POINTERS"
+#define	MALLOC_REVOKE_SKIP_KERNEL_REVOCATION \
+	"_RUNTIME_REVOCATION_SKIP_KERNEL_REVOCATION"
 
 #define	MALLOC_QUARANTINE_DENOMINATOR_ENV \
 	"_RUNTIME_QUARANTINE_DENOMINATOR"
@@ -317,6 +319,7 @@ static bool revoke_async = false;
 static bool bound_pointers = false;
 static bool abort_on_validation_failure = true;
 static bool mrs_initialized = false;
+static bool skip_kernel_revocation = false;
 
 static unsigned int quarantine_denominator = QUARANTINE_DENOMINATOR;
 static unsigned int quarantine_numerator = QUARANTINE_NUMERATOR;
@@ -827,14 +830,16 @@ app_quarantine_revoke_async(void)
 	epoch = TAILQ_FIRST(&app_quarantine_revoke_list)->epoch;
 	mrs_unlock(&app_quarantine_lock);
 
-	(void)cheri_revoke(CHERI_REVOKE_ASYNC, epoch, NULL);
+	if (!skip_kernel_revocation)
+		(void)cheri_revoke(CHERI_REVOKE_ASYNC, epoch, NULL);
 
 	/*
 	 * Is it possible that some of the pending revocation work has finished?
 	 * Flush some of the revoked memory back to the underlying allocator if
 	 * so.
 	 */
-	if (cheri_revoke_epoch_clears(cri->epochs.dequeue, epoch)) {
+	if (skip_kernel_revocation ||
+	    cheri_revoke_epoch_clears(cri->epochs.dequeue, epoch)) {
 		struct mrs_quarantine tmp;
 
 		mrs_lock(&app_quarantine_lock);
@@ -844,7 +849,8 @@ app_quarantine_revoke_async(void)
 			return;
 		}
 		assert(next->revoking);
-		if (!cheri_revoke_epoch_clears(cri->epochs.dequeue,
+		if (!skip_kernel_revocation &&
+		    !cheri_revoke_epoch_clears(cri->epochs.dequeue,
 		    next->epoch)) {
 			mrs_unlock(&app_quarantine_lock);
 			return;
@@ -1054,7 +1060,8 @@ quarantine_revoke(struct mrs_quarantine *quarantine)
 	cheri_revoke_epoch_t start_epoch = cri->epochs.enqueue;
 
 	MRS_UTRACE(UTRACE_MRS_QUARANTINE_REVOKE, NULL, 0, 0, NULL);
-	while (!cheri_revoke_epoch_clears(cri->epochs.dequeue, start_epoch)) {
+	while (!skip_kernel_revocation &&
+	    !cheri_revoke_epoch_clears(cri->epochs.dequeue, start_epoch)) {
 # ifdef PRINT_CAPREVOKE
 		struct cheri_revoke_syscall_info crsi = { 0 };
 		uint64_t cyc_init, cyc_fini;
@@ -1405,6 +1412,9 @@ mrs_init_impl_locked(void)
 			bound_pointers = true;
 		else if (getenv(MALLOC_NOBOUND_CHERI_POINTERS) != NULL)
 			bound_pointers = false;
+
+		if (getenv(MALLOC_REVOKE_SKIP_KERNEL_REVOCATION) != NULL)
+			skip_kernel_revocation = true;
 	}
 	if (!quarantining)
 		goto nosys;
