@@ -138,6 +138,8 @@ extern void snmalloc_flush_message_queue(void);
 	"_RUNTIME_BOUND_CHERI_POINTERS"
 #define	MALLOC_NOBOUND_CHERI_POINTERS \
 	"_RUNTIME_NOBOUND_CHERI_POINTERS"
+#define	MALLOC_REVOKE_SKIP_KERNEL_REVOCATION \
+	"_RUNTIME_REVOCATION_SKIP_KERNEL_REVOCATION"
 
 #define	MALLOC_QUARANTINE_DENOMINATOR_ENV \
 	"_RUNTIME_QUARANTINE_DENOMINATOR"
@@ -318,6 +320,7 @@ static bool revoke_async = false;
 static bool bound_pointers = false;
 static bool abort_on_validation_failure = true;
 static bool mrs_initialized = false;
+static bool skip_kernel_revocation = false;
 
 static unsigned int quarantine_denominator = QUARANTINE_DENOMINATOR;
 static unsigned int quarantine_numerator = QUARANTINE_NUMERATOR;
@@ -1056,7 +1059,8 @@ quarantine_revoke(struct mrs_quarantine *quarantine)
 	cheri_revoke_epoch_t start_epoch = cri->epochs.enqueue;
 
 	MRS_UTRACE(UTRACE_MRS_QUARANTINE_REVOKE, NULL, 0, 0, NULL);
-	while (!cheri_revoke_epoch_clears(cri->epochs.dequeue, start_epoch)) {
+	while (!skip_kernel_revocation &&
+	    !cheri_revoke_epoch_clears(cri->epochs.dequeue, start_epoch)) {
 # ifdef PRINT_CAPREVOKE
 		struct cheri_revoke_syscall_info crsi = { 0 };
 		uint64_t cyc_init, cyc_fini;
@@ -1407,6 +1411,9 @@ mrs_init_impl_locked(void)
 			bound_pointers = true;
 		else if (getenv(MALLOC_NOBOUND_CHERI_POINTERS) != NULL)
 			bound_pointers = false;
+
+		if (getenv(MALLOC_REVOKE_SKIP_KERNEL_REVOCATION) != NULL)
+			skip_kernel_revocation = true;
 	}
 	if (!quarantining)
 		goto nosys;
