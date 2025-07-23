@@ -1758,6 +1758,9 @@ vm_handle_smccc_call(struct vcpu *vcpu, struct vm_exit *vme, bool *retu)
 static int
 vm_handle_wfi(struct vcpu *vcpu, struct vm_exit *vme, bool *retu)
 {
+	struct thread *td;
+
+	td = curthread;
 	vcpu_lock(vcpu);
 	while (1) {
 		if (vgic_has_pending_irq(vcpu->cookie))
@@ -1773,6 +1776,15 @@ vm_handle_wfi(struct vcpu *vcpu, struct vm_exit *vme, bool *retu)
 		 */
 		msleep_spin(vcpu, &vcpu->mtx, "vmidle", hz);
 		vcpu_require_state_locked(vcpu, VCPU_FROZEN);
+		if (td_ast_pending(td, TDA_SUSPEND)) {
+			int error;
+
+			vcpu_unlock(vcpu);
+			error = thread_check_susp(td, false);
+			if (error != 0)
+				return (error);
+			vcpu_lock(vcpu);
+		}
 	}
 	vcpu_unlock(vcpu);
 
