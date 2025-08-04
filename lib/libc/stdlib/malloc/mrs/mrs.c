@@ -138,6 +138,10 @@ extern void snmalloc_flush_message_queue(void);
 	"_RUNTIME_BOUND_CHERI_POINTERS"
 #define	MALLOC_NOBOUND_CHERI_POINTERS \
 	"_RUNTIME_NOBOUND_CHERI_POINTERS"
+#define	MALLOC_CLEAR_ON_FREE_ENV \
+	"_RUNTIME_CLEAR_ON_FREE"
+#define	MALLOC_NOCLEAR_ON_FREE_ENV \
+	"_RUNTIME_NOCLEAR_ON_FREE"
 
 #define	MALLOC_QUARANTINE_DENOMINATOR_ENV \
 	"_RUNTIME_QUARANTINE_DENOMINATOR"
@@ -318,6 +322,7 @@ static bool revoke_async = false;
 static bool bound_pointers = false;
 static bool abort_on_validation_failure = true;
 static bool mrs_initialized = false;
+static bool clear_on_free = false;
 
 static unsigned int quarantine_denominator = QUARANTINE_DENOMINATOR;
 static unsigned int quarantine_numerator = QUARANTINE_NUMERATOR;
@@ -1406,6 +1411,11 @@ mrs_init_impl_locked(void)
 			bound_pointers = true;
 		else if (getenv(MALLOC_NOBOUND_CHERI_POINTERS) != NULL)
 			bound_pointers = false;
+
+		if (getenv(MALLOC_CLEAR_ON_FREE_ENV) != NULL)
+			clear_on_free = true;
+		else if (getenv(MALLOC_NOCLEAR_ON_FREE_ENV) != NULL)
+			clear_on_free = false;
 	}
 	if (!quarantining)
 		goto nosys;
@@ -1766,9 +1776,8 @@ mrs_free(void *ptr)
 	}
 #endif /* !OFFLOAD_QUARANTINE */
 
-#ifdef CLEAR_ON_FREE
-	bzero(cheri_setoffset(ptr, 0), cheri_getlen(ptr));
-#endif
+	if (clear_on_free)
+		bzero(cheri_setoffset(ptr, 0), cheri_getlen(ptr));
 
 	mrs_lock(&app_quarantine_lock);
 	quarantine_insert(app_quarantine, ins, cheri_getlen(ins));
