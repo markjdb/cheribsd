@@ -1144,26 +1144,6 @@ fault:
 	return (0);
 }
 
-static void
-arm64_set_dbg_state(struct hypctx *hypctx)
-{
-	bool brk, ss;
-
-	brk = (hypctx->setcaps & (1 << VM_CAP_BRK_EXIT)) != 0;
-	ss = (hypctx->setcaps & (1 << VM_CAP_SS_EXIT)) != 0;
-	if (brk || ss) {
-		hypctx->mdcr_el2 |= MDCR_EL2_TDE;
-
-		if (ss) {
-			hypctx->tf.tf_spsr |= PSR_SS;
-			hypctx->mdscr_el1 |= MDSCR_SS;
-			hypctx->mdcr_el2 |= MDCR_EL2_TDE;
-		}
-	} else {
-		hypctx->mdcr_el2 &= ~MDCR_EL2_TDE;
-	}
-}
-
 int
 vmmops_run(void *vcpui, uintcap_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 {
@@ -1266,7 +1246,6 @@ vmmops_run(void *vcpui, uintcap_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 		 */
 		arm64_set_active_vcpu(hypctx);
 		vgic_flush_hwstate(hypctx);
-		arm64_set_dbg_state(hypctx);
 
 		/* Call into EL2 to switch to the guest */
 		excp_type = vmm_enter_guest(hyp, hypctx);
@@ -1556,20 +1535,17 @@ vmmops_setcap(void *vcpui, int num, int val)
 
 	switch (num) {
 	case VM_CAP_BRK_EXIT:
-#if 0
 		if ((val != 0) == ((hypctx->setcaps & (1ul << num)) != 0))
 			break;
 		if (val != 0)
 			hypctx->mdcr_el2 |= MDCR_EL2_TDE;
 		else if ((hypctx->setcaps & (1ul << VM_CAP_SS_EXIT)) == 0)
 			hypctx->mdcr_el2 &= ~MDCR_EL2_TDE;
-#endif
 		break;
 	case VM_CAP_SS_EXIT:
 		if ((val != 0) == ((hypctx->setcaps & (1ul << num)) != 0))
 			break;
 
-#if 0
 		if (val != 0) {
 			hypctx->debug_spsr |= (hypctx->tf.tf_spsr & PSR_SS);
 			hypctx->debug_mdscr |= (hypctx->mdscr_el1 & MDSCR_SS);
@@ -1587,10 +1563,8 @@ vmmops_setcap(void *vcpui, int num, int val)
 			if ((hypctx->setcaps & (1ul << VM_CAP_BRK_EXIT)) == 0)
 				hypctx->mdcr_el2 &= ~MDCR_EL2_TDE;
 		}
-#endif
 		break;
 	case VM_CAP_MASK_HWINTR:
-#if 0
 		if ((val != 0) == ((hypctx->setcaps & (1ul << num)) != 0))
 			break;
 
@@ -1604,7 +1578,6 @@ vmmops_setcap(void *vcpui, int num, int val)
 			    (PSR_I | PSR_F));
 			hypctx->debug_spsr &= ~(PSR_I | PSR_F);
 		}
-#endif
 		break;
 	default:
 		ret = ENOENT;
