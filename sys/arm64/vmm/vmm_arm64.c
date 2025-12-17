@@ -81,6 +81,9 @@ CTASSERT((1ul << EL2_VIRT_BITS) >= HYP_VM_MAX_ADDRESS);
 #define	VMM_STACK_PAGES	4
 #define	VMM_STACK_SIZE	(VMM_STACK_PAGES * PAGE_SIZE)
 
+#define	VM_CAP_BRK_EXIT_MASK	(1 << VM_CAP_BRK_EXIT)
+#define	VM_CAP_SS_EXIT_MASK	(1 << VM_CAP_SS_EXIT)
+
 static int vmm_pmap_levels, vmm_virt_bits, vmm_max_ipa_bits;
 
 /* Register values passed to arm_setup_vectors to set in the hypervisor */
@@ -715,20 +718,36 @@ arm64_gen_inst_emul_data(struct hypctx *hypctx, uint32_t esr_iss,
 		paging->flags |= VM_GP_MMU_ENABLED;
 }
 
-static void
-arm64_gen_reg_emul_data(uint32_t esr_iss, struct vm_exit *vme_ret)
+static int
+arm64_gen_reg_emul_data(struct hypctx *hypctx, uint32_t esr_iss,
+    struct vm_exit *vme_ret)
 {
 	uint32_t reg_num;
 	struct vre *vre;
+	int dir;
+
+	/* ARMv8 Architecture Manual, p. D7-2273: 1 means read */
+	dir = (esr_iss & ISS_MSR_DIR) ? VM_DIR_READ : VM_DIR_WRITE;
+	reg_num = ISS_MSR_Rt(esr_iss);
+
+	if ((esr_iss & ISS_MSR_REG_MASK) == ISS_MSR_REG(MDSCR_EL1) &&
+	    (hypctx->setcaps & (VM_CAP_BRK_EXIT_MASK | VM_CAP_SS_EXIT_MASK)) &&
+	    reg_num <= 30) {
+		if (dir == VM_DIR_READ) {
+			hypctx->tf.tf_x[reg_num] = hypctx->mdscr_el1;
+		} else {
+			hypctx->mdscr_el1 = hypctx->debug_mdscr =
+			    hypctx->tf.tf_x[reg_num];
+		}
+		return (HANDLED);
+	}
 
 	/* u.hyp member will be replaced by u.reg_emul */
 	vre = &vme_ret->u.reg_emul.vre;
-
 	vre->inst_syndrome = esr_iss;
-	/* ARMv8 Architecture Manual, p. D7-2273: 1 means read */
-	vre->dir = (esr_iss & ISS_MSR_DIR) ? VM_DIR_READ : VM_DIR_WRITE;
-	reg_num = ISS_MSR_Rt(esr_iss);
+	vre->dir = dir;
 	vre->reg = reg_num;
+	return (UNHANDLED);
 }
 
 static void
@@ -780,7 +799,9 @@ handle_el1_sync_excp(struct hypctx *hypctx, struct vm_exit *vme_ret,
 		break;
 	case EXCP_MSR:
 		vmm_stat_incr(hypctx->vcpu, VMEXIT_MSR, 1);
-		arm64_gen_reg_emul_data(esr_iss, vme_ret);
+		if (arm64_gen_reg_emul_data(hypctx, esr_iss, vme_ret) ==
+		    HANDLED)
+			return (HANDLED);
 		vme_ret->exitcode = VM_EXITCODE_REG_EMUL;
 		break;
 	case EXCP_BRK:
@@ -1144,6 +1165,11 @@ fault:
 	return (0);
 }
 
+static void
+arm64_set_dbg_state(struct hypctx *hypctx)
+{
+}
+
 int
 vmmops_run(void *vcpui, uintcap_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 {
@@ -1246,6 +1272,7 @@ vmmops_run(void *vcpui, uintcap_t pc, pmap_t pmap, struct vm_eventinfo *evinfo)
 		 */
 		arm64_set_active_vcpu(hypctx);
 		vgic_flush_hwstate(hypctx);
+		arm64_set_dbg_state(hypctx);
 
 		/* Call into EL2 to switch to the guest */
 		excp_type = vmm_enter_guest(hyp, hypctx);
