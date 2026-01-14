@@ -566,7 +566,7 @@ enum vm_cro_at {
  * may equal ioff if the world has shifted; this is probably fine as the
  * caller should just repeat the call.  On failure, *ooff will not be modified.
  */
-static enum vm_cro_at
+static __noinline enum vm_cro_at
 vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
     vm_map_entry_t entry, vm_offset_t ioff, vm_offset_t *ooff, int *vmres)
 {
@@ -928,7 +928,7 @@ ok:
  * the revocation sweep is asynchronous and should terminate if the caller ends
  * up holding the final vmspace reference.
  */
-static int
+static __noinline int
 vm_cheri_revoke_map_entry(const struct vm_cheri_revoke_cookie *crc,
     struct vmspace *vm, vm_map_entry_t entry, vm_offset_t *addr)
 {
@@ -1059,7 +1059,7 @@ vm_cheri_revoke_pass_post(vm_map_t map)
  * The map lock must be held upon entry, and will be reacquired before
  * returning.
  */
-static int
+static __noinline int
 vm_cheri_revoke_pass_locked(struct vmspace *vm,
     const struct vm_cheri_revoke_cookie *crc)
 {
