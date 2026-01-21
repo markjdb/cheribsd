@@ -755,6 +755,16 @@ post_revoke_pass:
 
 	vm_map_lock(map);
 	cheri_revoke_st_set(&map->vm_cheri_revoke_st, epoch, myst);
+	if (res == KERN_SUCCESS && myst == CHERI_REVOKE_ST_CLOSING &&
+	    (flags & CHERI_REVOKE_ASYNC) != 0) {
+		cheri_revoke_epoch_t async_epoch __diagused;
+
+		async_epoch =
+		    cheri_revoke_st_get_epoch(map->vm_cheri_async_revoke_st);
+		KASSERT(async_epoch == epoch,
+		    ("async epoch out of sync: %ju != %ju",
+		    (uintmax_t)async_epoch, (uintmax_t)epoch));
+	}
 	if (res == KERN_SUCCESS)
 		vm_cheri_assert_consistent_clg(map);
 #ifdef CHERI_CAPREVOKE_STATS
