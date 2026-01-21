@@ -135,7 +135,8 @@ vm_cheri_revoke_pass_async_pre(vm_map_t map, struct vm_cheri_revoke_cookie *crc)
 }
 
 static void
-vm_cheri_revoke_pass_async_post(vm_map_t map, int error)
+vm_cheri_revoke_pass_async_post(vm_map_t map,
+    struct vm_cheri_revoke_cookie *crc, int error)
 {
 	cheri_revoke_epoch_t epoch;
 	enum cheri_revoke_state state __diagused;
@@ -148,9 +149,16 @@ vm_cheri_revoke_pass_async_post(vm_map_t map, int error)
 	KASSERT(state == CHERI_REVOKE_ST_INITED,
 	    ("unexpected post-async revoke state %d (epoch %lu)", state, epoch));
 
-	map->vm_cheri_async_revoke_status = error;
-	if (error == KERN_SUCCESS)
+	if (error == KERN_SUCCESS) {
+		struct cheri_revoke_epochs crepochs;
+
 		epoch++;
+		vm_map_unlock(map);
+		crepochs.enqueue = crepochs.dequeue = epoch;
+		vm_cheri_revoke_publish_epochs(crc, &crepochs);
+		vm_map_lock(map);
+	}
+	map->vm_cheri_async_revoke_status = error;
 	cheri_revoke_st_set(&map->vm_cheri_async_revoke_st, epoch,
 	    CHERI_REVOKE_ST_CLOSING);
 	map->vm_cheri_async_revoke_shadow = NULL;
@@ -205,7 +213,7 @@ vm_cheri_revoke_kproc(void *arg __unused)
 		 * A revocation pass is done.  Advance the state machine again
 		 * so that the application can see the result.
 		 */
-		vm_cheri_revoke_pass_async_post(map, error);
+		vm_cheri_revoke_pass_async_post(map, &arc->cookie, error);
 
 		free(arc, M_REVOKE);
 	}

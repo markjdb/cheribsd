@@ -576,15 +576,16 @@ fast_out:
 	 * is visible before any of our subsequent loads (we can't use
 	 * vm map lock to do this, because copyout might need the map).
 	 */
-	if ((entryst == CHERI_REVOKE_ST_NONE) &&
-	    (myst == CHERI_REVOKE_ST_CLOSING)) {
-		crepochs.enqueue = epoch + 2;
-	} else {
-		crepochs.enqueue = epoch + 1;
+	if (entryst == CHERI_REVOKE_ST_NONE) {
+		if (myst == CHERI_REVOKE_ST_CLOSING) {
+			crepochs.enqueue = epoch + 2;
+		} else {
+			crepochs.enqueue = epoch + 1;
+		}
+		crepochs.dequeue = epoch;
+		vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
+		wmb();
 	}
-	crepochs.dequeue = epoch;
-	vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
-	wmb();
 
 	/*
 	 * If we've already begun the load-side work and are now just going
@@ -743,8 +744,10 @@ post_revoke_pass:
 	if (res == KERN_SUCCESS && myst == CHERI_REVOKE_ST_CLOSING) {
 		/* Signal the end of this revocation epoch */
 		epoch++;
-		crepochs.dequeue = epoch;
-		vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
+		if ((flags & CHERI_REVOKE_ASYNC) == 0) {
+			crepochs.dequeue = epoch;
+			vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
+		}
 		myst = CHERI_REVOKE_ST_NONE;
 
 		vm_map_entry_end_revocation(map);
