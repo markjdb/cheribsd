@@ -1205,14 +1205,17 @@ vm_cheri_assert_consistent_clg(struct vm_map *map)
 int
 vm_cheri_revoke_cookie_init(vm_map_t map, struct vm_cheri_revoke_cookie *crc)
 {
-	KASSERT(map == &curproc->p_vmspace->vm_map || map->size == 0,
+	struct proc *p;
+
+	p = curproc;
+	KASSERT(map == &p->p_vmspace->vm_map || map->size == 0,
 	    ("cheri revoke does not support foreign maps (yet)"));
 
-	if (!SV_CURPROC_FLAG(SV_CHERI) && (curproc->p_flag & P_SYSTEM) == 0)
+	if (!SV_CURPROC_FLAG(SV_CHERI) && (p->p_flag & P_SYSTEM) == 0)
 		return (KERN_INVALID_ARGUMENT);
 
 	crc->map = map;
-	if ((curproc->p_flag & P_SYSTEM) != 0) {
+	if ((p->p_flag & P_SYSTEM) != 0) {
 		KASSERT(map->vm_cheri_async_revoke_shadow != NULL,
 		    ("cheri_revoke_shadow not installed in kernel map"));
 		crc->crshadow = map->vm_cheri_async_revoke_shadow;
@@ -1233,9 +1236,11 @@ vm_cheri_revoke_cookie_init(vm_map_t map, struct vm_cheri_revoke_cookie *crc)
 	 */
 	crc->crshadow = cheri_capability_build_user_rwx_unchecked(
 	    CHERI_PERM_LOAD | CHERI_PERM_GLOBAL,
-	    curproc->p_sysent->sv_cheri_revoke_shadow_base,
-	    curproc->p_sysent->sv_cheri_revoke_shadow_length,
-	    curproc->p_sysent->sv_cheri_revoke_shadow_offset);
+	    p->p_sysent->sv_cheri_revoke_shadow_base,
+	    p->p_sysent->sv_cheri_revoke_shadow_length,
+	    p->p_sysent->sv_cheri_revoke_shadow_offset);
+
+	vm_cheri_revoke_info_page(map, p->p_sysent, &crc->info_page);
 
 	return (KERN_SUCCESS);
 }
@@ -1372,12 +1377,11 @@ out:
 }
 
 void
-vm_cheri_revoke_publish_epochs(
-    struct cheri_revoke_info_page * __capability info_page,
+vm_cheri_revoke_publish_epochs(struct vm_cheri_revoke_cookie *vmcrc,
     const struct cheri_revoke_epochs *ip)
 {
 	struct cheri_revoke_epochs * __capability target =
-	    &info_page->pub.epochs;
+	    &vmcrc->info_page->pub.epochs;
 	int res __diagused;
 
 	res = copyout(ip, target, sizeof(*target));
@@ -1458,9 +1462,6 @@ void
 vm_cheri_revoke_info_page(struct vm_map *map, struct sysentvec *sv,
     struct cheri_revoke_info_page * __capability *ifp)
 {
-	KASSERT(map == &curthread->td_proc->p_vmspace->vm_map,
-	    ("vm_cheri_revoke_page_info req. intraprocess work right now"));
-
 	*ifp = cheri_capability_build_user_data(CHERI_PERM_LOAD |
 	    CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
 	    CHERI_PERM_GLOBAL,

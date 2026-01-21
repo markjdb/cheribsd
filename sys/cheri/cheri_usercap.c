@@ -117,7 +117,7 @@ _cheri_capability_build_user_rwx(uint32_t perms, ptraddr_t basep, size_t length,
     off_t off, const char* func __unused, int line __unused, bool exact)
 {
 	void * __capability tmpcap;
-#ifdef INVARIANTS
+#if 0
 	vm_map_entry_t entry;
 	vm_map_t map;
 	vm_offset_t reservation;

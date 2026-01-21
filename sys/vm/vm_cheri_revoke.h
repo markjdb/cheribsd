@@ -88,6 +88,7 @@ static const size_t VM_CHERI_REVOKE_GSZ_MEM_MAP = PAGE_SIZE;
 
 struct vm_cheri_revoke_cookie {
 	const uint8_t * __capability crshadow;
+	struct cheri_revoke_info_page * __capability info_page;
 	struct vm_map		*map;
 };
 
@@ -111,8 +112,7 @@ void * __capability vm_cheri_revoke_shadow_cap(struct sysentvec *,
     int sel, vm_offset_t base, vm_offset_t size, int perm_mask);
 
 /*  Publish epochs to shared page */
-void vm_cheri_revoke_publish_epochs(
-    struct cheri_revoke_info_page * __capability,
+void vm_cheri_revoke_publish_epochs(struct vm_cheri_revoke_cookie *,
     const struct cheri_revoke_epochs *);
 
 /*  Revoke a single capability if needed */

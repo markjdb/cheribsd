@@ -362,7 +362,6 @@ kern_cheri_revoke(struct thread *td, int flags,
 	struct vmspace *vmspace;
 	vm_map_t map;
 	struct vm_cheri_revoke_cookie vmcrc;
-	struct cheri_revoke_info_page * __capability info_page;
 
 	KASSERT(td == curthread, ("%s: td is not curthread", __func__));
 
@@ -551,13 +550,6 @@ fast_out:
 		    &map->vm_cheri_revoke_stats;
 #endif
 
-		res = vm_cheri_revoke_cookie_init(map, &vmcrc);
-		if (res != KERN_SUCCESS) {
-			vm_map_unlock(map);
-			return (cheri_revoke_fini(crsi, vm_mmap_to_errno(res),
-			    crstp, &crepochs));
-		}
-
 		/*
 		 * Don't bump the epoch count here, just the state!  Wait
 		 * until we're certain it's actually open, which we can only
@@ -572,6 +564,12 @@ fast_out:
 	}
 	vm_map_unlock(map);
 
+	res = vm_cheri_revoke_cookie_init(map, &vmcrc);
+	if (res != KERN_SUCCESS) {
+		return (cheri_revoke_fini(crsi, vm_mmap_to_errno(res),
+		    crstp, &crepochs));
+	}
+
 	/*
 	 * I am the revoker; expose an incremented epoch to userland
 	 * for its enqueue side.  Use a store fence to ensure that this
@@ -585,8 +583,7 @@ fast_out:
 		crepochs.enqueue = epoch + 1;
 	}
 	crepochs.dequeue = epoch;
-	vm_cheri_revoke_info_page(map, td->td_proc->p_sysent, &info_page);
-	vm_cheri_revoke_publish_epochs(info_page, &crepochs);
+	vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
 	wmb();
 
 	/*
@@ -747,7 +744,7 @@ post_revoke_pass:
 		/* Signal the end of this revocation epoch */
 		epoch++;
 		crepochs.dequeue = epoch;
-		vm_cheri_revoke_publish_epochs(info_page, &crepochs);
+		vm_cheri_revoke_publish_epochs(&vmcrc, &crepochs);
 		myst = CHERI_REVOKE_ST_NONE;
 
 		vm_map_entry_end_revocation(map);
