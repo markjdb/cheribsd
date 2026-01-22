@@ -775,6 +775,9 @@ quarantine_should_flush(struct mrs_quarantine *quarantine, bool is_free)
 	if (allocated_size < MIN_REVOKE_HEAP_SIZE)
 		return false;
 
+	if (revoke_async && cri->epochs.enqueue != cri->epochs.dequeue)
+		return false;
+
 	/*
 	 * Flush quarantine if
 	 *                                       quarantine_numerator
