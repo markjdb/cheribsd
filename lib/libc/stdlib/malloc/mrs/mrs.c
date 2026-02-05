@@ -396,9 +396,9 @@ static size_t max_allocated_size;
 
 /*
  * Quarantine arenas for application threads.  At any given time, one is in
- * active use, and the others are being cleaned.
+ * active use, and the others are being cleaned.  XXX-MJ
  */
-#define	APP_QUARANTINE_ARENAS	2
+#define	APP_QUARANTINE_ARENAS	3
 _Static_assert(APP_QUARANTINE_ARENAS >= 2,
     "APP_QUARANTINE_ARENAS must be at least 2");
 static struct mrs_quarantine app_quarantine_store[APP_QUARANTINE_ARENAS];
@@ -780,12 +780,14 @@ quarantine_should_flush(struct mrs_quarantine *quarantine, bool is_free)
 	if (is_free && revoke_every_free)
 		return true;
 
+#if 0
 #ifdef REVOKE_ON_FREE
 	if (!is_free)
 		return false;
 #else
 	if (is_free)
 		return false;
+#endif
 #endif
 
 	if (allocated_size < MIN_REVOKE_HEAP_SIZE)
@@ -826,16 +828,45 @@ app_quarantine_remove(struct mrs_quarantine *to, struct mrs_quarantine *src)
 static void
 app_quarantine_revoke_async(void)
 {
-	struct mrs_quarantine *curr, *next;
+	struct mrs_quarantine *curr, *first, *next;
 	cheri_revoke_epoch_t epoch;
+
+	if ((first = TAILQ_FIRST(&app_quarantine_revoke_list)) != NULL &&
+	    cheri_revoke_epoch_clears(cri->epochs.dequeue, first->epoch)) {
+		int error;
+
+		assert(cri->epochs.dequeue == cri->epochs.enqueue);
+		assert(first->revoking);
+		TAILQ_REMOVE(&app_quarantine_revoke_list, first, next);
+		assert(TAILQ_EMPTY(&app_quarantine_revoke_list));
+		mrs_unlock(&app_quarantine_lock);
+
+		error = cheri_revoke(CHERI_REVOKE_ASYNC, first->epoch, NULL);
+		assert(error == 0);
+
+		mrs_lock(&app_quarantine_lock);
+	} else {
+		first = NULL;
+	}
 
 	/*
 	 * Add this arena to the list of pending revocations if it isn't already
 	 * there.
 	 */
 	curr = app_quarantine;
+	assert(!curr->revoking);
 	next = TAILQ_FIRST(&app_quarantine_free_list);
-	if (!curr->revoking && next != NULL) {
+	if (next == NULL) {
+		mrs_unlock(&app_quarantine_lock);
+		return;
+	}
+	TAILQ_REMOVE(&app_quarantine_free_list, next, next);
+	app_quarantine = next;
+	epoch = curr->epoch = cri->epochs.enqueue;
+	curr->revoking = true;
+	TAILQ_INSERT_TAIL(&app_quarantine_revoke_list, curr, next);
+#if 0
+	if (next != NULL) {
 		TAILQ_REMOVE(&app_quarantine_free_list, next, next);
 		app_quarantine = next;
 
@@ -845,6 +876,7 @@ app_quarantine_revoke_async(void)
 	}
 	assert(!TAILQ_EMPTY(&app_quarantine_revoke_list));
 	epoch = TAILQ_FIRST(&app_quarantine_revoke_list)->epoch;
+#endif
 	mrs_unlock(&app_quarantine_lock);
 
 	(void)cheri_revoke(CHERI_REVOKE_ASYNC, epoch, NULL);
@@ -857,23 +889,30 @@ app_quarantine_revoke_async(void)
 	 * Flush some of the revoked memory back to the underlying allocator if
 	 * so.
 	 */
-	if (cheri_revoke_epoch_clears(cri->epochs.dequeue, epoch)) {
+	if (first != NULL) {
 		struct mrs_quarantine tmp;
 
 		mrs_lock(&app_quarantine_lock);
+#if 0
 		next = TAILQ_FIRST(&app_quarantine_revoke_list);
 		if (next == NULL) {
 			mrs_unlock(&app_quarantine_lock);
 			return;
 		}
-		assert(next->revoking);
+#endif
+		assert(first->revoking);
+#if 0
 		if (!cheri_revoke_epoch_clears(cri->epochs.dequeue,
 		    next->epoch)) {
 			mrs_unlock(&app_quarantine_lock);
 			return;
 		}
 
-		app_quarantine_remove(&tmp, next);
+		app_quarantine_remove(&tmp, first);
+#endif
+		quarantine_move(&tmp, first);
+		first->revoking = false;
+		TAILQ_INSERT_TAIL(&app_quarantine_free_list, first, next);
 		mrs_unlock(&app_quarantine_lock);
 		quarantine_flush(&tmp);
 	}
