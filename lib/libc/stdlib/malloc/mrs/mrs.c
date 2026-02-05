@@ -55,6 +55,7 @@
 #include <cheriintrin.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <malloc_np.h>
 #include <pthread.h>
@@ -146,6 +147,10 @@ extern void snmalloc_flush_message_queue(void);
 	"_RUNTIME_BOUND_CHERI_POINTERS"
 #define	MALLOC_NOBOUND_CHERI_POINTERS \
 	"_RUNTIME_NOBOUND_CHERI_POINTERS"
+#define	MALLOC_DUMP_STATS_ON_REVOKE \
+	"_RUNTIME_DUMP_STATS_ON_REVOKE"
+#define	MALLOC_DUMP_STATS_FILE \
+	"_RUNTIME_DUMP_STATS_FILE"
 
 #define	MALLOC_QUARANTINE_DENOMINATOR_ENV \
 	"_RUNTIME_QUARANTINE_DENOMINATOR"
@@ -326,6 +331,8 @@ static bool revoke_async = false;
 static bool bound_pointers = false;
 static bool abort_on_validation_failure = true;
 static bool mrs_initialized = false;
+static const char *stats_opts = NULL;
+static int stats_fd = -1;
 
 static unsigned int quarantine_denominator = QUARANTINE_DENOMINATOR;
 static unsigned int quarantine_numerator = QUARANTINE_NUMERATOR;
@@ -879,6 +886,9 @@ app_quarantine_revoke_async(void)
 #endif
 	mrs_unlock(&app_quarantine_lock);
 
+	if (stats_opts != NULL)
+		malloc_stats_print(NULL, NULL, stats_opts);
+
 	(void)cheri_revoke(CHERI_REVOKE_ASYNC, epoch, NULL);
 #ifdef __CHERI_PURE_CAPABILITY__
 	atomic_store(&cmsp->cms_mrs_epoch, epoch);
@@ -1365,6 +1375,12 @@ spawn_background(void)
 #endif /* OFFLOAD_QUARANTINE */
 
 static void
+mrs_malloc_message(void *cbopaque, const char *s)
+{
+	write(stats_fd, s, strlen(s));
+}
+
+static void
 mrs_init_impl_locked(void)
 {
 	initialize_lock(app_quarantine_lock);
@@ -1486,6 +1502,17 @@ mrs_init_impl_locked(void)
 			bound_pointers = true;
 		else if (getenv(MALLOC_NOBOUND_CHERI_POINTERS) != NULL)
 			bound_pointers = false;
+
+		if ((stats_opts = getenv(MALLOC_DUMP_STATS_ON_REVOKE)) != NULL) {
+			const char *file;
+
+			file = getenv(MALLOC_DUMP_STATS_FILE);
+			if (file == NULL)
+				file = "/tmp/mrs_revoke_stats.txt";
+			stats_fd = open(file, O_WRONLY | O_CREAT | O_TRUNC,
+			    0644);
+			malloc_message = mrs_malloc_message;
+		}
 	}
 	if (!quarantining)
 		goto nosys;
