@@ -787,14 +787,12 @@ quarantine_should_flush(struct mrs_quarantine *quarantine, bool is_free)
 	if (is_free && revoke_every_free)
 		return true;
 
-#if 0
 #ifdef REVOKE_ON_FREE
 	if (!is_free)
 		return false;
 #else
 	if (is_free)
 		return false;
-#endif
 #endif
 
 	if (allocated_size < MIN_REVOKE_HEAP_SIZE)
