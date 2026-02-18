@@ -65,9 +65,9 @@ procstat_cheri(struct procstat *procstat, struct kinfo_proc *kipp)
 			xo_emit("{T:/%5s %-19s %c %4s %5s}\n",
 			    "PID", "COMM", 'C', "QUAR", "C18N");
 		else
-			xo_emit("{T:/%5s %-19s %c %4s %7s %34s %5s}\n",
+			xo_emit("{T:/%5s %-19s %c %4s %7s %10s %12s %5s}\n",
 			    "PID", "COMM", 'C', "QUAR", "RSTATE", "EPOCH",
-			    "C18N");
+			    "LSF", "C18N");
 	}
 
 	xo_emit("{k:process_id/%5d/%d}", kipp->ki_pid);
@@ -79,8 +79,9 @@ procstat_cheri(struct procstat *procstat, struct kinfo_proc *kipp)
 	if ((procstat_opts & PS_OPT_VERBOSE) != 0) {
 		xo_emit(" {:revoker_state/%7s/%s}", abi_cheri == 'P' ?
 		    get_revoker_state(procstat, kipp) : "-");
-		xo_emit(" {:revoker_epoch/%34s/%s}", abi_cheri == 'P' ?
+		xo_emit(" {:revoker_epoch/%10s/%s}", abi_cheri == 'P' ?
 		    get_revoker_epoch(procstat, kipp) : "-");
+		xo_emit(" {:load_side_faults/%12u/%u}", kipp->ki_lsflt);
 	}
 	xo_emit(" {:compartments/%5s/%s}", get_c18n(procstat, kipp));
 	xo_emit("\n");
