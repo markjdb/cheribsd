@@ -290,6 +290,7 @@ struct thread {
 	int		td_swvoltick;	/* (t) Time at last SW_VOL switch. */
 	int		td_swinvoltick;	/* (t) Time at last SW_INVOL switch. */
 	u_int		td_cow;		/* (*) Number of copy-on-write faults */
+	u_int		td_lsflt;	/* (*) Number of load-side faults. */
 	struct rusage	td_ru;		/* (t) rusage information. */
 	struct rusage_ext td_rux;	/* (t) Internal rusage information. */
 	uint64_t	td_incruntime;	/* (t) Cpu ticks to transfer to proc. */
