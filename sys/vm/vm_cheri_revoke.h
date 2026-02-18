@@ -166,5 +166,16 @@ enum vm_cheri_revoke_fault_res vm_cheri_revoke_fault_visit(
 #endif
 #define CHERI_REVOKE_STATS_BUMP(st, ctr) CHERI_REVOKE_STATS_INC(st, ctr, 1)
 
+#ifdef SDT_PROBE_DECLARE
+SDT_PROBE_DECLARE(cheri_revoke, , , barrier__start);
+SDT_PROBE_DECLARE(cheri_revoke, , , barrier__end);
+SDT_PROBE_DECLARE(cheri_revoke, , , scan__start);
+SDT_PROBE_DECLARE(cheri_revoke, , , scan__end);
+SDT_PROBE_DECLARE(cheri_revoke, , , load__fault__start);
+SDT_PROBE_DECLARE(cheri_revoke, , , load__fault__end);
+SDT_PROBE_DECLARE(cheri_revoke, , , scan__page__ro);
+SDT_PROBE_DECLARE(cheri_revoke, , , scan__page__rw);
+#endif
+
 #endif /* CHERI_CAPREVOKE */
 #endif /* !_VM_CHERI_REVOKE_ */

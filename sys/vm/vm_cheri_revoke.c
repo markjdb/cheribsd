@@ -47,6 +47,7 @@
 #include <sys/refcount.h>
 #include <sys/rwlock.h>
 #include <sys/sched.h>
+#include <sys/sdt.h>
 #include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/unistd.h>
@@ -98,6 +99,25 @@ static COUNTER_U64_DEFINE_EARLY(cheri_last_ref_early_finish);
 SYSCTL_COUNTER_U64(_vm_stats_cheri_revoke, OID_AUTO, last_ref_early_finish, CTLFLAG_RD,
     &cheri_last_ref_early_finish,
     "Scans finished early because the target exited");
+
+SDT_PROVIDER_DEFINE(cheri_revoke);
+SDT_PROBE_DEFINE(cheri_revoke, , , barrier__start);
+SDT_PROBE_DEFINE(cheri_revoke, , , barrier__end);
+SDT_PROBE_DEFINE1(cheri_revoke, , , scan__start,
+    "struct vm_cheri_revoke_cookie *");
+SDT_PROBE_DEFINE2(cheri_revoke, , , scan__end,
+    "struct vm_cheri_revoke_cookie *", "int");
+SDT_PROBE_DEFINE1(cheri_revoke, , , load__fault__start,
+    "vm_offset_t");
+SDT_PROBE_DEFINE3(cheri_revoke, , , load__fault__end,
+    "vm_offset_t", "enum vm_cheri_revoker_fault_res", "vm_page_t");
+SDT_PROBE_DEFINE2(cheri_revoke, , , scan__page__ro,
+    "vm_page_t", "int");
+SDT_PROBE_DEFINE2(cheri_revoke, , , scan__page__rw,
+    "vm_page_t", "int");
+SDT_PROBE_DEFINE4(cheri_revoke, , , scan__page__visit,
+    "struct vm_cheri_revoke_cookie *", "vm_page_t", "vm_offset_t",
+    "enum pmap_caploadgen_res");
 
 /***************************** KERNEL THREADS ***************************/
 
@@ -408,6 +428,7 @@ vm_cheri_revoke_fault_visit(struct vmspace *uvms, vm_offset_t va)
 
 	pmap_t upmap = vmspace_pmap(uvms);
 
+	SDT_PROBE1(cheri_revoke, , , load__fault__start, va);
 again:
 	pres = pmap_caploadgen_update(upmap, va, &m,
 	    PMAP_CAPLOADGEN_UPDATETLB |
@@ -515,6 +536,8 @@ out:
 	sx_sunlock(&uvms->vm_map.vm_cheri_revoke_stats_sx);
 #endif
 
+	SDT_PROBE3(cheri_revoke, , , load__fault__end, va, res, m);
+
 	return (res);
 }
 
@@ -605,6 +628,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 	 *
 	 */
 	pres = pmap_caploadgen_update(crc->map->pmap, addr, &m, 0);
+	SDT_PROBE4(cheri_revoke, , , scan__page__visit, crc, m, addr, pres);
 	switch (pres) {
 	case PMAP_CAPLOADGEN_OK:
 	case PMAP_CAPLOADGEN_TEARDOWN:
@@ -1070,6 +1094,8 @@ vm_cheri_revoke_pass_locked(struct vmspace *vm,
 
 	vm_map_lock_downgrade(map);
 
+	SDT_PROBE1(cheri_revoke, , , scan__start, crc);
+
 	/*
 	 * Pinning the revoker helps improve determinism and so is useful for
 	 * benchmarking, but might be a liability under load.
@@ -1085,7 +1111,6 @@ vm_cheri_revoke_pass_locked(struct vmspace *vm,
 		 * MPROT_QUARANTINE'd map entries to be usable again, yes?
 		 */
 		res = vm_cheri_revoke_map_entry(crc, vm, entry, &addr);
-
 		switch (res) {
 		case KERN_SUCCESS:
 			break;
@@ -1130,6 +1155,8 @@ out:
 
 	if (pinned)
 		sched_unpin();
+
+	SDT_PROBE2(cheri_revoke, , , scan__end, crc, res);
 
 	vm_map_lock(map);
 
