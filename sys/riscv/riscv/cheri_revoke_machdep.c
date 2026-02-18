@@ -30,14 +30,12 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/unistd.h>
 #include <sys/proc.h>
+#include <sys/sdt.h>
 #include <sys/sysent.h>
 #include <cheri/revoke.h>
 
@@ -380,6 +378,8 @@ vm_cheri_revoke_page_rw(const struct vm_cheri_revoke_cookie *crc, vm_page_t m)
 	CHERI_REVOKE_STATS_INC(crst, page_scan_cycles, cyc_end - cyc_start);
 #endif
 
+	SDT_PROBE2(cheri_revoke, , , scan__page__rw, m, res);
+
 	return (res);
 }
 
@@ -460,6 +460,8 @@ vm_cheri_revoke_page_ro(const struct vm_cheri_revoke_cookie *crc, vm_page_t m)
 	uint32_t cyc_end = get_cyclecount();
 	crst->page_scan_cycles += cyc_end - cyc_start;
 #endif
+
+	SDT_PROBE2(cheri_revoke, , , scan__page__ro, m, res);
 
 	return (res);
 }
