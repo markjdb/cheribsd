@@ -89,6 +89,7 @@ static const size_t VM_CHERI_REVOKE_GSZ_MEM_MAP = PAGE_SIZE;
 struct vm_cheri_revoke_cookie {
 	const uint8_t * __capability crshadow;
 	struct vm_map		*map;
+	pid_t			pid;
 };
 
 int vm_cheri_revoke_cookie_init(struct vm_map *map,
