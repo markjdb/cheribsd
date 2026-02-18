@@ -84,7 +84,7 @@
  * it in two places: function fill_kinfo_proc in sys/kern/kern_proc.c and
  * function kvm_proclist in lib/libkvm/kvm_proc.c .
  */
-#define	KI_NSPARE_INT	2
+#define	KI_NSPARE_INT	1
 #define	KI_NSPARE_LONG	12
 #define	KI_NSPARE_PTR	5
 
@@ -188,6 +188,7 @@ struct kinfo_proc {
 	 */
 	char	ki_sparestrings[46];	/* spare string space */
 	int	ki_spareints[KI_NSPARE_INT];	/* spare room for growth */
+	u_int	ki_lsflt;		/* number of load-side faults */
 	uint64_t ki_tdev;		/* controlling tty dev */
 	int	ki_oncpu;		/* Which cpu we are on */
 	int	ki_lastcpu;		/* Last cpu we were on */

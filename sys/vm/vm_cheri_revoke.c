@@ -428,6 +428,7 @@ vm_cheri_revoke_fault_visit(struct vmspace *uvms, vm_offset_t va)
 
 	pmap_t upmap = vmspace_pmap(uvms);
 
+	curthread->td_lsflt++;
 	SDT_PROBE1(cheri_revoke, , , load__fault__start, va);
 again:
 	pres = pmap_caploadgen_update(upmap, va, &m,

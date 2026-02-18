@@ -1186,8 +1186,10 @@ fill_kinfo_proc_only(struct proc *p, struct kinfo_proc *kp)
 	kp->ki_childtime = kp->ki_childstime;
 	timevaladd(&kp->ki_childtime, &kp->ki_childutime);
 
-	FOREACH_THREAD_IN_PROC(p, td0)
+	FOREACH_THREAD_IN_PROC(p, td0) {
 		kp->ki_cow += td0->td_cow;
+		kp->ki_lsflt += td0->td_lsflt;
+	}
 
 	if (p->p_comm[0] != '\0')
 		strlcpy(kp->ki_comm, p->p_comm, sizeof(kp->ki_comm));
@@ -1351,6 +1353,7 @@ fill_kinfo_thread(struct thread *td, struct kinfo_proc *kp, int preferthread)
 		kp->ki_pctcpu = sched_pctcpu(td);
 		kp->ki_estcpu = sched_estcpu(td);
 		kp->ki_cow = td->td_cow;
+		kp->ki_lsflt = td->td_lsflt;
 	}
 
 	/* We can't get this anymore but ps etc never used it anyway. */
