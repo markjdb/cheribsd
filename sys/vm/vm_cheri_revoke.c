@@ -645,11 +645,6 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 		 * Fall back to VM lookup.  We either could not resolve
 		 * the page at this address (perhaps because there isn't
 		 * one) or we couldn't wire something being torn down.
-		 *
-		 * XXX In some eventuality it might be nice to have the
-		 * pmap able to definitely answer "there isn't a page
-		 * here even if you go ask the VM", a sort of analogy
-		 * to skipping to the next VM map entry.
 		 */
 		break;
 
