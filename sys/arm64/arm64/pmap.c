@@ -942,6 +942,11 @@ pmap_pte_cr(pmap_t pmap, vm_offset_t va, vm_prot_t prot)
 }
 #endif
 
+static bool pmap_capstore_dirty = true;
+SYSCTL_BOOL(_vm_pmap, OID_AUTO, capstore_dirty, CTLFLAG_RWTUN,
+    &pmap_capstore_dirty, 0,
+    "Preemptively mark PTEs as capdirty when writing");
+
 static pt_entry_t
 pmap_pte_prot(pmap_t pmap, vm_prot_t prot, u_int flags, vm_page_t m,
     vm_offset_t va)
@@ -977,13 +982,12 @@ pmap_pte_prot(pmap_t pmap, vm_prot_t prot, u_int flags, vm_page_t m,
 		 *
 		 * XXX: work around a qemu limitation (no CDBM support) and set
 		 * ATTR_SC for the kernel where emulating ATTR_CDBM is hard.
-		 *
-		 * XXX We could also conditionally set ATTR_SC if PGA_CAPDIRTY,
-		 * but it's not required.
 		 */
-		if (pmap->pm_stage == PM_STAGE1 && va < VM_MAX_USER_ADDRESS)
+		if (pmap->pm_stage == PM_STAGE1 && va < VM_MAX_USER_ADDRESS) {
 			val |= ATTR_CDBM;
-		else
+			if ((flags & VM_PROT_WRITE) != 0 && pmap_capstore_dirty)
+				val |= ATTR_SC;
+		} else
 			val |= ATTR_SC;
 	}
 #endif
