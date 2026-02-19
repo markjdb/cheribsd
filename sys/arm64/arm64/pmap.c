@@ -6808,6 +6808,21 @@ retry:
 		break;
 	}
 
+	if (!(tpte & ATTR_LC_GEN_MASK) == !(pmap->flags.uclg)) {
+		/*
+		 * Page already scanned, just fence (maybe redundantly).  If
+		 * this is a large mapping, invalidating a single VA is still
+		 * sufficient.
+		 */
+		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+			pmap_s1_invalidate_page(pmap, va, true);
+		}
+
+		m = NULL;
+		res = PMAP_CAPLOADGEN_ALREADY;
+		goto out;
+	}
+
 	switch (lvl) {
 	default:
 		__assert_unreachable();
@@ -6841,17 +6856,6 @@ retry:
 			goto retry;
 		}
 		break;
-	}
-
-	if (!(tpte & ATTR_LC_GEN_MASK) == !(pmap->flags.uclg)) {
-		/* Page already scanned, just fence (maybe redundantly) */
-		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
-			pmap_s1_invalidate_page(pmap, va, true);
-		}
-
-		m = NULL;
-		res = PMAP_CAPLOADGEN_ALREADY;
-		goto out;
 	}
 
 	m = PHYS_TO_VM_PAGE(tpte & ~ATTR_MASK);

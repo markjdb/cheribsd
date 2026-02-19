@@ -4211,6 +4211,9 @@ retry:
 	if ((l2e & PTE_RWX) != 0) {
 		bool demoted;
 
+		if (!(l2e & PTE_CRG) == !(pmap->flags.uclg))
+			goto clg_match;
+
 		/*
 		 * Demote superpage and contiguous mappings.  When performing
 		 * load-side revocation, we don't want to pay the latency
@@ -4259,7 +4262,13 @@ retry:
 	}
 
 	if (!(oldpte & PTE_CRG) == !(pmap->flags.uclg)) {
-		/* Page already scanned, just fence (maybe redundantly) */
+clg_match:
+		/*
+		 * Page already scanned, just fence (maybe redundantly).
+		 * Just invalidate the small mapping corresponding to the VA,
+		 * that should be sufficient to clean up a stale TLB entry
+		 * whether it corresponds to a large mapping or not.
+		 */
 		if (flags & PMAP_CAPLOADGEN_UPDATETLB)
 			sfence_vma_page(va);
 
