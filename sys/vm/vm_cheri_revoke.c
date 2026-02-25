@@ -109,8 +109,8 @@ SDT_PROBE_DEFINE2(cheri_revoke, , , scan__end,
     "struct vm_cheri_revoke_cookie *", "int");
 SDT_PROBE_DEFINE1(cheri_revoke, , , load__fault__start,
     "vm_offset_t");
-SDT_PROBE_DEFINE3(cheri_revoke, , , load__fault__end,
-    "vm_offset_t", "enum vm_cheri_revoker_fault_res", "vm_page_t");
+SDT_PROBE_DEFINE4(cheri_revoke, , , load__fault__end,
+    "vm_offset_t", "enum vm_cheri_revoker_fault_res", "vm_page_t", "int");
 SDT_PROBE_DEFINE3(cheri_revoke, , , scan__page__ro,
     "struct vm_cheri_revoke_cookie *", "vm_page_t", "int");
 SDT_PROBE_DEFINE3(cheri_revoke, , , scan__page__rw,
@@ -414,7 +414,7 @@ vm_cheri_revoke_fault_visit(struct vmspace *uvms, vm_offset_t va)
 #endif
 	enum vm_cheri_revoke_fault_res res;
 	enum pmap_caploadgen_res pres;
-	int vres;
+	int count, psind, vres;
 	struct vm_cheri_revoke_cookie crc;
 	vm_page_t m = NULL;
 	bool hascap = false;
@@ -431,7 +431,7 @@ vm_cheri_revoke_fault_visit(struct vmspace *uvms, vm_offset_t va)
 	curthread->td_lsflt++;
 	SDT_PROBE1(cheri_revoke, , , load__fault__start, va);
 again:
-	pres = pmap_caploadgen_update(upmap, va, &m,
+	pres = pmap_caploadgen_update(upmap, va, &m, &psind,
 	    PMAP_CAPLOADGEN_UPDATETLB |
 	    (xbusied ? PMAP_CAPLOADGEN_XBUSIED : 0) |
 	    (hascap ? PMAP_CAPLOADGEN_HASCAPS : 0));
@@ -473,32 +473,42 @@ again:
 	 * know it won't be repurposed (through pageout or laundry), but it may
 	 * be removed from the pmap where we were looking.
 	 */
+	count = atop(pagesizes[psind]);
 	switch (pres) {
 	default:
 		panic("impossible");
 
 	case PMAP_CAPLOADGEN_SCAN_RO_WIRED:
 	case PMAP_CAPLOADGEN_SCAN_RO_XBUSIED:
-		vres = vm_cheri_revoke_page_ro(&crc, m);
-		if (vres & VM_CHERI_REVOKE_PAGE_DIRTY) {
-			/*
-			 * Need to write but can't to current mapping.  We can't
-			 * use PGA_WRITEABLE because the page isn't busy, just
-			 * wired down.  Fall out and synchronize with the VM.
-			 */
-			if (xbusied) {
-				vm_page_xunbusy(m);
-			} else {
-				vm_page_unwire(m, PQ_ACTIVE);
+		vres = 0;
+		for (int i = 0; i < count; i++) {
+			vres |= vm_cheri_revoke_page_ro(&crc, m + i);
+			if (vres & VM_CHERI_REVOKE_PAGE_DIRTY) {
+				/*
+				 * Need to write but can't to current mapping.
+				 * We can't use PGA_WRITEABLE because the page
+				 * isn't busy, just wired down.  Fall out and
+				 * synchronize with the VM.
+				 */
+				for (i = 0; i < count; i++) {
+					if (xbusied) {
+						vm_page_xunbusy(m + i);
+					} else {
+						vm_page_unwire(m + i,
+						    PQ_ACTIVE);
+					}
+				}
+				res = VM_CHERI_REVOKE_FAULT_CAPSTORE;
+				goto out;
 			}
-			res = VM_CHERI_REVOKE_FAULT_CAPSTORE;
-			goto out;
 		}
 		hascap = vres & VM_CHERI_REVOKE_PAGE_HASCAPS;
 		break;
 
 	case PMAP_CAPLOADGEN_SCAN_RW_XBUSIED:
-		vres = vm_cheri_revoke_page_rw(&crc, m);
+		vres = 0;
+		for (int i = 0; i < count; i++)
+			vres |= vm_cheri_revoke_page_rw(&crc, m + i);
 
 		/*
 		 * Discard VM_CHERI_REVOKE_PAGE_DIRTY: losing a load-side CAS
@@ -537,7 +547,7 @@ out:
 	sx_sunlock(&uvms->vm_map.vm_cheri_revoke_stats_sx);
 #endif
 
-	SDT_PROBE3(cheri_revoke, , , load__fault__end, va, res, m);
+	SDT_PROBE4(cheri_revoke, , , load__fault__end, va, res, m, psind);
 
 	return (res);
 }
@@ -601,7 +611,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 	vm_offset_t addr = ioff - entry->offset + entry->start;
 	vm_page_t m = NULL;
 	enum pmap_caploadgen_res pres;
-	int res;
+	int pcount, psind, res;
 	unsigned int last_timestamp;
 	bool mwired = false;
 	bool mxbusy = false;
@@ -628,7 +638,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 	 *    immediate fallback to the VM (vm_page_grab_valid or vm_fault).
 	 *
 	 */
-	pres = pmap_caploadgen_update(crc->map->pmap, addr, &m, 0);
+	pres = pmap_caploadgen_update(crc->map->pmap, addr, &m, &psind, 0);
 	SDT_PROBE4(cheri_revoke, , , scan__page__visit, crc, m, addr, pres);
 	switch (pres) {
 	case PMAP_CAPLOADGEN_OK:
@@ -637,7 +647,7 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 
 	case PMAP_CAPLOADGEN_ALREADY:
 	case PMAP_CAPLOADGEN_CLEAN:
-		*ooff = ioff + PAGE_SIZE;
+		*ooff = ioff + pagesizes[psind];
 		return (VM_CHERI_REVOKE_AT_OK);
 
 	case PMAP_CAPLOADGEN_UNABLE:
@@ -650,16 +660,19 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 
 	case PMAP_CAPLOADGEN_SCAN_RO_WIRED:
 		VM_OBJECT_WUNLOCK(obj);
+		pcount = atop(pagesizes[psind]);
 		mwired = true;
 		goto visit_ro;
 
 	case PMAP_CAPLOADGEN_SCAN_RO_XBUSIED:
 		VM_OBJECT_WUNLOCK(obj);
+		pcount = atop(pagesizes[psind]);
 		mxbusy = true;
 		goto visit_ro;
 
 	case PMAP_CAPLOADGEN_SCAN_RW_XBUSIED:
 		VM_OBJECT_WUNLOCK(obj);
+		pcount = atop(pagesizes[psind]);
 		mxbusy = true;
 		goto visit_rw;
 	}
@@ -680,6 +693,8 @@ vm_cheri_revoke_object_at(const struct vm_cheri_revoke_cookie *crc,
 	 *
 	 * XXXNWF 20220802 is that still true?
 	 */
+	psind = 0;
+	pcount = 1;
 	(void)vm_page_grab_valid(&m, obj, ipi, VM_ALLOC_NOZERO);
 
 	if (m == NULL) {
@@ -768,7 +783,8 @@ visit_rw:
 
 		if (m->object == obj) {
 			/* Visit the page RW in place */
-			vm_cheri_revoke_visit_rw(crc, m, &viscap);
+			for (int i = 0; i < pcount; i++)
+				vm_cheri_revoke_visit_rw(crc, m + i, &viscap);
 			goto ok;
 		}
 
@@ -783,33 +799,38 @@ visit_rw:
 visit_ro:
 	KASSERT(mxbusy || mwired, ("RO visit !busy !wired?"));
 
-	switch (vm_cheri_revoke_visit_ro(crc, m, &viscap)) {
-	case VM_CHERI_REVOKE_VIS_DONE:
-		/* We were able to conclude that the page was clean while RO*/
-		goto ok;
-	case VM_CHERI_REVOKE_VIS_DIRTY:
-		/* Dirty here means we need to upgrade to RW now */
-		break;
-	default:
-		panic("bad result from vm_cheri_revoke_visit_ro");
+	for (int i = 0; i < pcount; i++) {
+		switch (vm_cheri_revoke_visit_ro(crc, m + i, &viscap)) {
+		case VM_CHERI_REVOKE_VIS_DONE:
+			/* We were able to conclude that the page was clean while RO*/
+			break;
+		case VM_CHERI_REVOKE_VIS_DIRTY:
+			/* Dirty here means we need to upgrade to RW now */
+			goto visit_rw_fault;
+		default:
+			__assert_unreachable();
+		}
 	}
+	goto ok;
 
 visit_rw_fault:
 	CHERI_REVOKE_STATS_BUMP(crst, pages_faulted_rw);
 
-	if (mwired) {
-		mwired = false;
-		vm_page_unwire_in_situ(m);
+	for (int i = 0; i < pcount; i++) {
+		if (mwired)
+			vm_page_unwire_in_situ(m + i);
+		if (mxbusy)
+			vm_page_xunbusy(m + i);
 	}
-	if (mxbusy) {
-		mxbusy = false;
-		vm_page_xunbusy(m);
-	}
+	mwired = false;
+	mxbusy = false;
 
 	last_timestamp = map->timestamp;
 	vm_map_unlock_read(map);
 	VM_OBJECT_ASSERT_UNLOCKED(obj);
 	m = NULL;
+	psind = 0;
+	pcount = 1;
 
 	res = vm_fault(map, addr, VM_PROT_WRITE | VM_PROT_CAP,
 	    VM_FAULT_NORMAL, &m);
@@ -840,7 +861,7 @@ ok:
 	if (!mdidvm) {
 		vm_page_t m2 = m;
 
-		pres = pmap_caploadgen_update(crc->map->pmap, addr, &m2,
+		pres = pmap_caploadgen_update(crc->map->pmap, addr, &m2, &psind,
 		    (mxbusy ? PMAP_CAPLOADGEN_XBUSIED : 0) |
 		    (mxbusy ? PMAP_CAPLOADGEN_NONEWMAPS : 0) |
 		    (viscap ? PMAP_CAPLOADGEN_HASCAPS : 0));
@@ -858,12 +879,16 @@ ok:
 			break;
 
 		case PMAP_CAPLOADGEN_SCAN_RO_WIRED:
-			vm_page_unwire_in_situ(m2);
+			pcount = atop(pagesizes[psind]);
+			for (int i = 0; i < pcount; i++)
+				vm_page_unwire_in_situ(m2 + i);
 			break;
 
 		case PMAP_CAPLOADGEN_SCAN_RW_XBUSIED:
 		case PMAP_CAPLOADGEN_SCAN_RO_XBUSIED:
-			vm_page_xunbusy(m2);
+			pcount = atop(pagesizes[psind]);
+			for (int i = 0; i < pcount; i++)
+				vm_page_xunbusy(m2 + i);
 			break;
 
 		case PMAP_CAPLOADGEN_TEARDOWN:
@@ -879,14 +904,14 @@ ok:
 		KASSERT(m2 == NULL || !mxbusy,
 		    ("mapping of %p was replaced by a mapping of %p", m, m2));
 
-		/* pmap_caploadgen_update() will have released the page. */
+		/* pmap_caploadgen_update() will have released the pages. */
 		mwired = false;
 		mxbusy = false;
 	} else {
 #ifdef INVARIANTS
 		vm_page_t m2 = m;
 
-		pres = pmap_caploadgen_update(crc->map->pmap, addr, &m2,
+		pres = pmap_caploadgen_update(crc->map->pmap, addr, &m2, &psind,
 		    (mxbusy ? PMAP_CAPLOADGEN_XBUSIED : 0));
 		switch (pres) {
 		case PMAP_CAPLOADGEN_UNABLE:
@@ -894,12 +919,16 @@ ok:
 			break;
 
 		case PMAP_CAPLOADGEN_SCAN_RO_WIRED:
-			vm_page_unwire_in_situ(m2);
+			pcount = atop(pagesizes[psind]);
+			for (int i = 0; i < pcount; i++)
+				vm_page_unwire_in_situ(m2 + i);
 			break;
 
 		case PMAP_CAPLOADGEN_SCAN_RW_XBUSIED:
 		case PMAP_CAPLOADGEN_SCAN_RO_XBUSIED:
-			vm_page_xunbusy(m2);
+			pcount = atop(pagesizes[psind]);
+			for (int i = 0; i < pcount; i++)
+				vm_page_xunbusy(m2 + i);
 			break;
 
 		case PMAP_CAPLOADGEN_TEARDOWN:
@@ -924,12 +953,8 @@ ok:
 		mxbusy = false;
 #endif
 	}
-	if (mwired)
-		vm_page_unwire_in_situ(m);
-	if (mxbusy)
-		vm_page_xunbusy(m);
 
-	*ooff = ioff + PAGE_SIZE;
+	*ooff = ioff + ptoa(pcount);
 
 	VM_OBJECT_WLOCK(obj);
 
@@ -997,9 +1022,7 @@ vm_cheri_revoke_map_entry(const struct vm_cheri_revoke_cookie *crc,
 	VM_OBJECT_WLOCK(obj);
 	while (*addr < entry->end) {
 		int vmres;
-#ifdef INVARIANTS
-		vm_offset_t oaddr = *addr;
-#endif
+		vm_offset_t oaddr __diagused = *addr;
 
 		/* Has the target process already exited? */
 		if (vm != NULL && refcount_load(&vm->vm_refcnt) == 1) {
@@ -1027,9 +1050,17 @@ vm_cheri_revoke_map_entry(const struct vm_cheri_revoke_cookie *crc,
 
 		/* How far did we get? */
 		*addr = ooffset - entry->offset + entry->start;
+
+		/*
+		 * XXX-MJ this assertion can legitimately fail if a superpage
+		 * mapping straddles two map entries.
+		 */
+		(void)oaddr;
+#if 0
 		KASSERT(*addr <= entry->end,
 		    ("vm_cheri_revoke post past entry end: %lx > %lx (was %lx)",
 			entry->end, *addr, oaddr));
+#endif
 
 	}
 	VM_OBJECT_WUNLOCK(obj);

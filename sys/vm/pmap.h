@@ -122,11 +122,16 @@ void		 pmap_advise(pmap_t pmap, vm_offset_t sva, vm_offset_t eva,
 		    int advice);
 void		 pmap_align_superpage(vm_object_t, vm_ooffset_t, vm_offset_t *,
 		    vm_size_t);
+
 #ifdef CHERI_CAPREVOKE
-static const int PMAP_CAPLOADGEN_HASCAPS   = 0x1;
-static const int PMAP_CAPLOADGEN_NONEWMAPS = 0x2; // no new mappings
-static const int PMAP_CAPLOADGEN_UPDATETLB = 0x4;
-static const int PMAP_CAPLOADGEN_XBUSIED   = 0x8; // input page xbusied, !wired
+#define	PMAP_CAPLOADGEN_HASCAPS		0x0001
+#define	PMAP_CAPLOADGEN_NONEWMAPS	0x0002 /* no new mappings */
+#define	PMAP_CAPLOADGEN_UPDATETLB	0x0004
+#define	PMAP_CAPLOADGEN_XBUSIED		0x0008 /* input page xbusied, !wired */
+
+#define	PMAP_CAPLOADGEN_PSIND_SHIFT	4
+#define	PMAP_CAPLOADGEN_PSIND_MASK	0x00f0
+
 enum pmap_caploadgen_res {
 	PMAP_CAPLOADGEN_OK              = 0, /* Update done */
 	PMAP_CAPLOADGEN_ALREADY         = 1, /* Update already applied */
@@ -138,7 +143,7 @@ enum pmap_caploadgen_res {
 	PMAP_CAPLOADGEN_SCAN_RW_XBUSIED = 7, /* mapped RW and xbusy */
 };
 enum pmap_caploadgen_res pmap_caploadgen_update(pmap_t, vm_offset_t,
-		    vm_page_t *, int flags);
+		    vm_page_t *, int *, int);
 void		 pmap_caploadgen_next(pmap_t pmap);
 void		 pmap_assert_consistent_clg(pmap_t, vm_offset_t);
 #endif

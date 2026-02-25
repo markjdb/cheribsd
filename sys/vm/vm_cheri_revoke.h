@@ -136,9 +136,8 @@ enum {
 };
 void vm_cheri_revoke_set_test(struct vm_map *map, int flags);
 
-/*  Walking a particular page */
-#define VM_CHERI_REVOKE_PAGE_HASCAPS 0x01
-#define VM_CHERI_REVOKE_PAGE_DIRTY 0x02
+#define VM_CHERI_REVOKE_PAGE_HASCAPS 0x01	/* page has at least one cap */
+#define VM_CHERI_REVOKE_PAGE_DIRTY 0x02		/* page has a quarantined cap */
 int vm_cheri_revoke_page_rw(
     const struct vm_cheri_revoke_cookie *c, struct vm_page *m);
 int vm_cheri_revoke_page_ro(

@@ -6768,17 +6768,68 @@ out:
 	}
 }
 
+static enum pmap_caploadgen_res
+pmap_caprevoke_lookup_locked(pmap_t pmap, vm_offset_t va, vm_page_t *mp,
+    pt_entry_t **ptep, int *psindp)
+{
+	pt_entry_t *pte, tpte;
+	vm_page_t m;
+	int lvl, psind;
+
+	PMAP_ASSERT_STAGE1(pmap);
+	PMAP_LOCK_ASSERT(pmap, MA_OWNED);
+
+	pte = pmap_pte(pmap, va, &lvl);
+	if (pte == NULL)
+		return (PMAP_CAPLOADGEN_UNABLE);
+	tpte = pmap_load(pte);
+	switch (tpte & ATTR_LC_MASK) {
+	case ATTR_LC_DISABLED:
+	case ATTR_LC_ENABLED:
+		return (PMAP_CAPLOADGEN_UNABLE);
+	}
+
+	switch (lvl) {
+	default:
+		__assert_unreachable();
+	case 1:
+		return (PMAP_CAPLOADGEN_UNABLE);
+	case 2:
+		m = PHYS_TO_VM_PAGE(tpte & ~ATTR_MASK);
+		psind = 2;
+		break;
+	case 3:
+		if ((tpte & ATTR_CONTIGUOUS) != 0) {
+			m = PHYS_TO_VM_PAGE((tpte & ~ATTR_MASK) & ~L3C_OFFSET);
+			pte = (pt_entry_t *)((uintptr_t)pte & ~((L3C_ENTRIES *
+			    sizeof(pt_entry_t)) - 1));
+			psind = 1;
+		} else {
+			m = PHYS_TO_VM_PAGE(tpte & ~ATTR_MASK);
+			psind = 0;
+		}
+		break;
+	}
+	*mp = m;
+	*ptep = pte;
+	*psindp = psind;
+
+	if (!(tpte & ATTR_LC_GEN_MASK) == !(pmap->flags.uclg))
+		return (PMAP_CAPLOADGEN_ALREADY);
+	return (PMAP_CAPLOADGEN_OK);
+}
+
 enum pmap_caploadgen_res
-pmap_caploadgen_update(pmap_t pmap, vm_offset_t va, vm_page_t *mp, int flags)
+pmap_caploadgen_update(pmap_t pmap, vm_offset_t va, vm_page_t *mp, int *psindp,
+    int flags)
 {
 	enum pmap_caploadgen_res res;
+#if 0
 	struct rwlock *lock;
-#if VM_NRESERVLEVEL > 0
-	pd_entry_t *l2, l2e;
 #endif
-	pt_entry_t *pte, tpte, exppte;
+	pt_entry_t *pte, tpte;
 	vm_page_t m;
-	int lvl;
+	int psind;
 
 	PMAP_ASSERT_STAGE1(pmap);
 	PMAP_LOCK(pmap);
@@ -6788,6 +6839,7 @@ pmap_caploadgen_update(pmap_t pmap, vm_offset_t va, vm_page_t *mp, int flags)
 	    ("pmap_caploadgen_update: pmap clg %d but CPU mismatch",
 	    (int)pmap->flags.uclg));
 
+#if 0
 retry:
 	pte = pmap_pte(pmap, va, &lvl);
 	if (pte == NULL) {
@@ -6859,6 +6911,31 @@ retry:
 	}
 
 	m = PHYS_TO_VM_PAGE(tpte & ~ATTR_MASK);
+#endif
+	res = pmap_caprevoke_lookup_locked(pmap, va, &m, &pte, &psind);
+	switch (res) {
+	default:
+		__assert_unreachable();
+	case PMAP_CAPLOADGEN_ALREADY:
+		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+			/*
+			 * Page already scanned, just fence (maybe redundantly).
+			 * If this is a large mapping, invalidating a single VA
+			 * is still sufficient.
+			 */
+			pmap_s1_invalidate_page(pmap, va, true);
+		}
+		/* FALLTHROUGH */
+	case PMAP_CAPLOADGEN_UNABLE:
+		m = NULL;
+		goto out;
+	case PMAP_CAPLOADGEN_OK:
+		break;
+	}
+	KASSERT(psind >= 0 && psind <= 2,
+	    ("unexpected page size index %d", psind));
+
+	tpte = pmap_load(pte);
 	if (*mp == m) {
 		/*
 		 * We expected this page here (i.e., this is the page we just
@@ -6866,8 +6943,14 @@ retry:
 		 * must still be wrong in light of the earlier test.
 		 */
 		res = PMAP_CAPLOADGEN_OK;
+#if 0
+		if (psind != *psindp)
+			panic("oh crap! %d %d", psind, *psindp);
+#endif
 
-		if (!(flags & PMAP_CAPLOADGEN_HASCAPS)) {
+		/* XXX-MJ how shall we handle L3C mappings? */
+		if (!(flags & PMAP_CAPLOADGEN_HASCAPS) &&
+		    (tpte & ATTR_CONTIGUOUS) == 0) {
 			/*
 			 * We didn't see a capability on this page; step this
 			 * PTE closer to being cap-clean.
@@ -6882,6 +6965,8 @@ retry:
 				 */
 				pmap_clear_bits(pte, ATTR_SC);
 			} else if (tpte & ATTR_CDBM) {
+				pt_entry_t exppte;
+
 				/*
 				 * PTE CAP-DIRTYABLE -> CAP-CLEAN
 				 *
@@ -6908,7 +6993,6 @@ retry:
 				 */
 				exppte = tpte;
 				pmap_fcmpset(pte, &exppte, exppte & ~ATTR_CDBM);
-
 			} else if (flags & PMAP_CAPLOADGEN_NONEWMAPS) {
 				/* No new mappings possible */
 				vm_page_astate_t mas = vm_page_astate_load(m);
@@ -6940,7 +7024,7 @@ retry:
 					}
 					PMAP_UNLOCK(pmap);
 					pmap_caploadgen_test_all_clean(m);
-					m = NULL;
+					m = NULL; /* XXX-MJ remove? */
 					goto out_unlocked;
 				}
 			}
@@ -6952,8 +7036,18 @@ retry:
 			 * We could clear PGA_CAPDIRTY here, too, but it
 			 * probably doesn't get set often ough to merit.
 			 */
-			if ((tpte & ATTR_CDBM) && !(tpte & ATTR_SC)) {
-				pmap_set_bits(pte, ATTR_SC);
+			if (psind == 1) {
+				for (int i = 0; i < L3C_ENTRIES; i++) {
+					tpte = pmap_load(pte + i);
+					if ((tpte & ATTR_CDBM) &&
+					    !(tpte & ATTR_SC)) {
+						pmap_set_bits(pte + i, ATTR_SC);
+					}
+				}
+			} else {
+				if ((tpte & ATTR_CDBM) && !(tpte & ATTR_SC)) {
+					pmap_set_bits(pte, ATTR_SC);
+				}
 			}
 		}
 
@@ -6965,13 +7059,28 @@ retry:
 		 * retries) than we could otherwise easily get (either 1 LL/SC
 		 * CAS + epsilon retries or 1 AMOSWAP to a zero PTE + 1 store).
 		 */
-		pmap_update_pte_clg(pmap, pte);
+		if (psind == 1) {
+			for (int i = 0; i < L3C_ENTRIES; i++) {
+				/*
+				 * XXX-MJ do these updates really need to be
+				 * atomic?
+				 */
+				pmap_update_pte_clg(pmap, pte + i);
+			}
+			if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+				pmap_s1_invalidate_range(pmap, va,
+				    va + L3C_SIZE, true);
+			}
+		} else {
+			pmap_update_pte_clg(pmap, pte);
 
-		if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
-			pmap_s1_invalidate_page(pmap, va, true);
+			if (flags & PMAP_CAPLOADGEN_UPDATETLB) {
+				pmap_s1_invalidate_page(pmap, va, true);
+			}
 		}
 		m = NULL;
-	} else if (!(vm_page_astate_load(m).flags & PGA_CAPSTORE)) {
+	} else if ((vm_page_astate_load(m).flags & PGA_CAPSTORE) == 0) {
+		/* XXX-MJ this might not be true for all constituent pages */
 		KASSERT(!(tpte & ATTR_CDBM), ("!PGA_CAPSTORE but CDBM?"));
 		KASSERT(!(tpte & ATTR_SC), ("!PGA_CAPSTORE but SC?"));
 
@@ -6989,30 +7098,78 @@ retry:
 
 		m = NULL;
 		res = PMAP_CAPLOADGEN_CLEAN;
-	} else if (vm_page_tryxbusy(m)) {
-		/*
-		 * OK, we have the page xbusy'd and so new writeable mappings
-		 * will not appear.
-		 */
-		if ((tpte & ATTR_DBM) != 0) {
-			res = PMAP_CAPLOADGEN_SCAN_RW_XBUSIED;
-		} else {
-			res = PMAP_CAPLOADGEN_SCAN_RO_XBUSIED;
-		}
-	} else if (vm_page_wire_mapped(m)) {
-		/*
-		 * OK, couldn't xbusy the page but could wire it down.  It's
-		 * safe to do a RO sweep now, and hopefully that's enough to
-		 * clear the page for return to service.
-		 */
-		res = PMAP_CAPLOADGEN_SCAN_RO_WIRED;
 	} else {
-		/* Could neither xbusy nor wire this page; fall back to VM */
+		int count, i;
+
+		count = atop(pagesizes[psind]);
+		for (i = 0; i < count; i++) {
+			if (!vm_page_tryxbusy(m + i)) {
+				for (int j = i - 1; j >= 0; j--)
+					vm_page_xunbusy(m + j);
+				break;
+			}
+		}
+		if (i == count) {
+			/*
+			 * We have the pages xbusied and so new writeable
+			 * mappings will not appear.
+			 */
+			if ((tpte & ATTR_SW_DBM) != 0) {
+				res = PMAP_CAPLOADGEN_SCAN_RW_XBUSIED;
+			} else {
+				res = PMAP_CAPLOADGEN_SCAN_RO_XBUSIED;
+			}
+			goto out;
+		}
+
+		for (i = 0; i < count; i++) {
+			if (!vm_page_wire_mapped(m + i)) {
+				for (int j = i - 1; j >= 0; j--)
+					vm_page_unwire_in_situ(m + j);
+				break;
+			}
+		}
+		if (i == count) {
+			/*
+			 * We couldn't xbusy the pages but could wire them down.
+			 * It's safe to do a RO sweep now, and hopefully that's
+			 * enough to clear the pages for return to service.
+			 */
+			res = PMAP_CAPLOADGEN_SCAN_RO_WIRED;
+			goto out;
+		}
+
 		m = NULL;
 		res = PMAP_CAPLOADGEN_TEARDOWN;
+		goto out;
+#if 0
+		if (vm_page_tryxbusy(m)) {
+			/*
+			 * OK, we have the page xbusy'd and so new writeable mappings
+			 * will not appear.
+			 */
+			if ((pmap_load(pte) & ATTR_SW_DBM) != 0) {
+				res = PMAP_CAPLOADGEN_SCAN_RW_XBUSIED;
+			} else {
+				res = PMAP_CAPLOADGEN_SCAN_RO_XBUSIED;
+			}
+		} else if (vm_page_wire_mapped(m)) {
+			/*
+			 * OK, couldn't xbusy the page but could wire it down.  It's
+			 * safe to do a RO sweep now, and hopefully that's enough to
+			 * clear the page for return to service.
+			 */
+			res = PMAP_CAPLOADGEN_SCAN_RO_WIRED;
+		} else {
+			/* Could neither xbusy nor wire this page; fall back to VM */
+			m = NULL;
+			res = PMAP_CAPLOADGEN_TEARDOWN;
+		}
+#endif
 	}
 
 out:
+#if 0
 #if VM_NRESERVLEVEL > 0
 	/*
 	 * If we...
@@ -7027,6 +7184,8 @@ out:
 	    (va & L3C_OFFSET) == (PTE_TO_PHYS(tpte) & L3C_OFFSET) &&
 	    vm_reserv_is_populated(m, L3C_ENTRIES) &&
 	    pmap_promote_l3c(pmap, pte, va)) {
+		pd_entry_t *l2, l2e;
+
 		KASSERT(lvl == 3,
 		    ("pmap_caploadgen_update superpage: lvl != 3"));
 		KASSERT((m->flags & PG_FICTITIOUS) == 0,
@@ -7050,19 +7209,26 @@ out:
 		}
 	}
 #endif /* VM_NRESERVLEVEL > 0 */
+#endif
 
 	PMAP_UNLOCK(pmap);
 out_unlocked:
 	if (*mp != NULL) {
+		int count;
+
+		count = atop(pagesizes[*psindp]);
 		if (flags & PMAP_CAPLOADGEN_XBUSIED) {
-			vm_page_xunbusy(*mp);
+			for (int i = 0; i < count; i++)
+				vm_page_xunbusy(*mp + i);
 		} else {
-			vm_page_unwire_in_situ(*mp);
+			for (int i = 0; i < count; i++)
+				vm_page_unwire_in_situ(*mp + i);
 		}
 	}
 	*mp = m;
+	*psindp = psind;
 
-	return res;
+	return (res);
 }
 
 void
